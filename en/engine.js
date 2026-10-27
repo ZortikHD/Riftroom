@@ -1,3 +1,4 @@
+import {restoreMetaMode} from '../meta-data.js';
 export const ROLES=['TOP','JUNGLE','MIDDLE','BOTTOM','UTILITY'];
 // Winrate mit 200 virtuellen Spielen Richtung 50 % geglättet, damit seltene Picks nicht übertrieben wirken.
 export const adj=e=>(e.wins+100)/(e.games+200);
@@ -186,7 +187,7 @@ const TAG_ROLE={Marksman:'BOTTOM',Support:'UTILITY',Mage:'MIDDLE',Assassin:'MIDD
 function derivedProfile(id){const c=CATALOG_BY_ID.get(id);if(!c)return null;const t=c.tags||[],i=c.info||{};const tank=t.includes('Tank'),fighter=t.includes('Fighter'),support=t.includes('Support'),mage=t.includes('Mage');
  return{roles:[TAG_ROLE[t[0]]||'TOP'],damage:(i.magic||0)>=(i.attack||0)+3?'magic':(i.attack||0)>=(i.magic||0)+3?'physical':'mixed',front:tank?3:fighter?((i.defense||0)>=6?2:1):0,engage:tank?2:fighter?1:0,peel:support?2:(tank||mage)?1:0,scaling:2,estimated:true};}
 export function profileOf(id){const base=PROFILES[id]||derivedProfile(id);if(!base)return null;const extra=META_ROLES.get(id);if(!extra)return base;const roles=base.estimated?[...extra]:[...new Set([...base.roles,...extra])];return{...base,roles};}
-export function initialState(){return{version:1,teamName:'My Team',players:ROLES.map((role,i)=>({name:`Player ${String(i+1).padStart(2,'0')}`,role,pool:[['Ornn','Gnar','Camille'],['JarvanIV','Sejuani','Viego'],['Orianna','Ahri','Syndra'],['Jinx','Kaisa','Ashe'],['Rakan','Nautilus','Lulu']][i].map(id=>({id,comfort:3}))})),allies:Array(5).fill(null),enemies:Array(5).fill(null),bans:Array(10).fill(null),selectedRole:0,poolOnly:false,feedUrl:'',targetPatch:'',meta:null,catalog:null,lastChecked:null,templates:[],seenPatch:'',draftMode:'free',side:'blue',opponents:[],opponentId:'',history:[],matchups:{},draftActive:false};}
+export function initialState(){return{version:1,teamName:'My Team',players:ROLES.map((role,i)=>({name:`Player ${String(i+1).padStart(2,'0')}`,role,pool:[['Ornn','Gnar','Camille'],['JarvanIV','Sejuani','Viego'],['Orianna','Ahri','Syndra'],['Jinx','Kaisa','Ashe'],['Rakan','Nautilus','Lulu']][i].map(id=>({id,comfort:3}))})),allies:Array(5).fill(null),enemies:Array(5).fill(null),bans:Array(10).fill(null),selectedRole:0,poolOnly:false,feedUrl:'',targetPatch:'',meta:null,metaMode:'published',catalog:null,lastChecked:null,templates:[],seenPatch:'',draftMode:'free',side:'blue',opponents:[],opponentId:'',history:[],matchups:{},draftActive:false};}
 // Regionen für die op.gg-Suche (Kürzel wie in op.gg-Links).
 export const OPP_REGIONS=['euw','eune','na','kr','tr','br','lan','las','oce','jp','ru','me','sg','tw','vn'];
 export const emptyOppPlayers=()=>ROLES.map(()=>({riotId:'',champs:[]}));
@@ -235,7 +236,7 @@ export function validateState(s,catalog){
  base.selectedRole=Number.isInteger(s.selectedRole)&&s.selectedRole>=0&&s.selectedRole<5?s.selectedRole:0;base.poolOnly=!!s.poolOnly;
  if(s.targetPatch&&!/^\d{1,2}\.\d{1,2}(\.\d+)?$/.test(s.targetPatch))throw Error('Invalid target patch.');base.targetPatch=s.targetPatch||'';
  if(s.feedUrl){const u=new URL(s.feedUrl);if(u.protocol!=='https:'||u.username||u.password||u.search||u.hash)throw Error('The data URL must use HTTPS and must not contain credentials or query parameters.');base.feedUrl=u.href;}
- if(s.meta)base.meta=validateMeta(s.meta,ids);base.lastChecked=typeof s.lastChecked==='string'&&Number.isFinite(Date.parse(s.lastChecked))?s.lastChecked:null;
+ base.metaMode=restoreMetaMode(s);if(s.meta)base.meta=validateMeta(s.meta,ids);base.lastChecked=typeof s.lastChecked==='string'&&Number.isFinite(Date.parse(s.lastChecked))?s.lastChecked:null;
  base.seenPatch=typeof s.seenPatch==='string'&&/^\d{1,2}\.\d{1,2}$/.test(s.seenPatch)?s.seenPatch:'';
  base.templates=(Array.isArray(s.templates)?s.templates:[]).slice(0,20).flatMap(t=>{try{if(!t||typeof t.name!=='string')return[];const pick=(a,n)=>{if(!Array.isArray(a)||a.length!==n)throw Error();return a.map(id=>{if(id===null)return null;if(id==='none'&&n===10)return 'none';if(!ids.has(id))throw Error();return id;});};return[{id:String(t.id||t.name).slice(0,30),name:t.name.slice(0,40),allies:pick(t.allies,5),enemies:pick(t.enemies,5),bans:pick(t.bans,10)}];}catch{return[];}});
  base.draftMode=s.draftMode==='tournament'?'tournament':'free';base.draftActive=!!s.draftActive;base.side=s.side==='red'?'red':'blue';

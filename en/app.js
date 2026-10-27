@@ -1,3 +1,4 @@
+import {acceptPublishedMeta,fetchPublishedBundle} from '../meta-data.js';
 import BUNDLED_CATALOG from './catalog.js';
 // Champion-Bilder liegen als kleine Einzeldateien neben der Seite (img/sq, img/ld) und laden erst, wenn sie gebraucht werden.
 const imgPath=dir=>new Proxy({},{get:(_,id)=>typeof id==='string'&&/^[A-Za-z0-9]+$/.test(id)?`img/${dir}/${id}.webp`:undefined});
@@ -27,7 +28,7 @@ const icon=(name,cls='')=>`<svg class="icon ${cls}" viewBox="0 0 24 24" fill="no
 
 let state=initialState(),catalog,page='draft',metaTab='pool',refreshMessage='',toastTimer,pickerTarget=null,pickerRole='ALL',pickerSearch='',metaRole='ALL',metaSearch='',metaSort='adjusted',confirmAction=null,prevMeta=null,backupTimer,selectedOpponent='',analysisText='',analysisBusy=false,analysisCtrl=null,templatesOpen=false,logResult=null;
 // Animationen nur für Änderungen: Vergleich mit dem zuletzt gezeigten Draft (auch bei Picks von Teammitgliedern).
-let lastBoard=null,lastComp=null;
+let lastBoard=null,lastComp=null,metaLoading=false,publishedMeta=null;
 function clearDraftView(){analysisText='';lastBoard=null;csKey=null;}
 // Übungs-Draft: läuft nur in diesem Browser. Der echte Draft wird vorher gesichert und danach zurückgeholt.
 let practice=null,pendingRemote=null,prSide='blue',prTimer=true;
@@ -608,8 +609,8 @@ const randomFree=tk=>{const free=catalog.champions.filter(c=>!tk.has(c.id));retu
 function aiMove(c){
  if(!practice)return;
  const tk=taken(),aiPrev=[...state.enemies];
- if(c.type==='ban'){const id=aiBan(state,state.meta,tk)||randomFree(tk);const i=[5,6,7,8,9].find(k=>!state.bans[k]);if(i!=null)state.bans[i]=id;}
- else{const r=aiPick(state,state.meta,tk,activeOpp(),catalog);if(r)state.enemies[r.i]=r.id;else{const i=state.enemies.findIndex(x=>!x);if(i>=0)state.enemies[i]=randomFree(tk);}}
+ if(c.type==='ban'){const id=aiBan(state,status().ok?state.meta:null,tk)||randomFree(tk);const i=[5,6,7,8,9].find(k=>!state.bans[k]);if(i!=null)state.bans[i]=id;}
+ else{const r=aiPick(state,status().ok?state.meta:null,tk,activeOpp(),catalog);if(r)state.enemies[r.i]=r.id;else{const i=state.enemies.findIndex(x=>!x);if(i>=0)state.enemies[i]=randomFree(tk);}}
  save();render();
  if(c.type==='pick'){const i=state.enemies.findIndex((x,k)=>x&&!aiPrev[k]);if(i>=0)lockSplash(state.enemies[i],'them',i);}
 }
@@ -679,7 +680,7 @@ async function analyze(){
 /* ---------- Meta ---------- */
 function renderMeta(){
  const m=state.meta,s=status();
- if(!m)return head('Meta','Win rates by role, ban suggestions and trends since the last patch.')+`<section class="card empty"><h2>No win rates yet</h2><p>Win rates are loaded automatically every day. As soon as data arrives, pool check, ban suggestions and trends appear here.</p><button class="btn" data-action="import-meta">${icon('upload')}Import your own data</button></section>`;
+ if(!m)return head('Meta','Win rates by role, ban suggestions and trends since the last patch.')+`<section class="card empty"><h2>No win rates yet</h2><p>Retrieves the latest published snapshot. New statistics require an updated data source; there is no guaranteed daily update.</p>${metaControls()}<button class="btn" data-action="import-meta">${icon('upload')}Import your own data</button></section>`;
  const byId=new Map(catalog.champions.map(c=>[c.id,c]));
  const prev=prevMeta&&shortPatch(prevMeta.patch)!==shortPatch(m.patch)?prevMeta:null;
  const sub=`Patch ${esc(shortPatch(m.patch))} · ${esc(m.rank)} · ${esc(m.region)} · ${int(m.matches)} games · as of ${date(m.updatedAt)}`;
@@ -698,7 +699,7 @@ function renderMeta(){
   body=`<section class="card flush"><div class="filters"><div class="search">${icon('search')}<input class="field" id="meta-search" placeholder="Search champion" value="${esc(metaSearch)}" aria-label="Search champion"></div><select class="field" id="meta-role" aria-label="Filter by role"><option value="ALL">All roles</option>${ROLES.map(r=>`<option value="${r}" ${metaRole===r?'selected':''}>${ROLE_NAMES[r]}</option>`).join('')}</select><select class="field" id="meta-sort" aria-label="Sort"><option value="adjusted" ${metaSort==='adjusted'?'selected':''}>Smoothed win rate</option><option value="wins" ${metaSort==='wins'?'selected':''}>Win rate</option><option value="games" ${metaSort==='games'?'selected':''}>Games</option></select></div><div id="meta-table">${metaTable()}</div></section><p class="fine">Smoothed = (wins + 100) / (games + 200). This pulls small samples towards 50%.</p>`;
  }
  const note=!s.ok?`<div class="banner warn">These win rates are currently not used in recommendations: ${esc(s.label)}.</div>`:s.fallback?`<div class="banner">Patch ${esc(shortPatch(currentPatch()))} is new and has too few games yet. Until there is enough data, we show and use the win rates from patch ${esc(shortPatch(m.patch))}.</div>`:'';
- return head('Meta',sub)+note+`<div class="subtabs" role="tablist">${META_TABS.map(([k,l])=>`<button role="tab" data-meta-tab="${k}" aria-selected="${metaTab===k}">${l}</button>`).join('')}</div>`+body;
+ return head('Meta',sub,metaControls())+note+`<div class="subtabs" role="tablist">${META_TABS.map(([k,l])=>`<button role="tab" data-meta-tab="${k}" aria-selected="${metaTab===k}">${l}</button>`).join('')}</div>`+body;
 }
 function metaTable(){
  if(!state.meta)return'';
@@ -804,6 +805,7 @@ function saveGame(){
 }
 
 /* ---------- Daten ---------- */
+function metaControls(){return `<div class="row wrap"><button class="btn" data-action="refresh-meta" ${metaLoading?'disabled':''}>${icon('refresh')}${metaLoading?"Checking…":"Update meta"}</button>${state.metaMode!=='published'?'<button class="btn" data-action="use-published-meta">Use published data</button>':''}<span class="tag">${state.metaMode==='imported'?"Own import":state.metaMode==='disabled'?"Disabled":"Published data"}</span></div>`;}
 function renderSettings(){
  const m=state.meta,s=status();
  const steps=[['Champion pool','Weight 35. Your comfort (1–5) sets the value. Champions outside the pool start lower.'],['Team composition','Weight 40. Missing frontline, missing engage, damage balance and protection for carries.'],['Opponent profile','Weight 15 once opponent picks are known. Peel against engage, scaling against frontline. No measured lane counters.'],['Win rates','Weight 25, only with matching current data. The win rate is smoothed towards 50% with 200 virtual games.']];
@@ -813,10 +815,10 @@ function renderSettings(){
   <div><dt>Champion catalog</dt><dd>Riot Data Dragon ${esc(catalog.version)} · ${catalog.champions.length} champions</dd></div>
   <div><dt>Win rates</dt><dd>${m?`${esc(m.source)} · Patch ${esc(shortPatch(m.patch))} · ${date(m.updatedAt)}`:'No data yet'} <span class="tag ${s.ok?'good':'warn'}">${m?esc(s.label):'missing'}</span></dd></div>
   <div><dt>Comparison patch</dt><dd>${prevMeta?'Patch '+esc(shortPatch(prevMeta.patch)):'not available'}</dd></div>
- </dl><p class="fine" style="margin-top:14px">Win rates are updated automatically every day.</p></section>
+ </dl>${metaControls()}<p class="fine" style="margin-top:14px">Retrieves the latest published snapshot. New statistics require an updated data source; there is no guaranteed daily update.<br>Last successful retrieval: ${date(state.lastChecked)}</p></section>
  <section class="card"><h2 class="card-title">Target patch</h2><form id="settings-form"><div class="row"><input class="field grow" id="target-patch" value="${esc(state.targetPatch)}" placeholder="Automatic: ${esc(shortPatch(catalog.version))}" maxlength="12" aria-label="Target patch"><button class="btn" type="submit">Save</button></div><p class="fine" style="margin-top:8px">Only needed if your tournament is played on a different patch. Win rates are only used if the patch matches and they are at most 14 days old.</p><div id="settings-error" class="err" role="alert"></div></form></section>
  <section class="card"><h2 class="card-title">Backup</h2><p class="fine">${STANDALONE?'Team, pools, drafts and opponents stay in this browser. With “Show backup” you can copy them and pass them on to your team.':'When signed in to Claude, team, pools, drafts and opponents are automatically shared with everyone who opens this page. Without signing in they stay in this browser.'}</p><div class="row wrap" style="margin-top:14px"><button class="btn" data-action="export">${icon('download')}Show backup</button><button class="btn" data-action="import-team">${icon('upload')}Import backup</button></div></section>${STANDALONE?'<section class="card"><h2 class="card-title">Install as an app</h2><p class="fine">On PC and Android an “App” button appears at the top as soon as the browser offers installation. On iPhone, tap “Share” in Safari and then “Add to Home Screen”. Updates arrive automatically after that.</p></section>':''}
- <section class="card"><h2 class="card-title">Your own win rates</h2><p class="fine">Instead of the automatic data you can load your own JSON file. It only applies in this browser.</p><div class="row wrap" style="margin-top:14px"><button class="btn" data-action="import-meta">${icon('upload')}Import file</button>${m?'<button class="btn ghost" data-action="clear-meta">Remove win rates</button>':''}</div><details class="fold inner"><summary>File format ${icon('chevrondown')}</summary><pre class="code">${esc(sample)}</pre><p class="fine">Champion IDs as in Data Dragon, roles: TOP, JUNGLE, MIDDLE, BOTTOM, UTILITY. The numbers in the example are placeholders only.</p></details></section>
+ <section class="card"><h2 class="card-title">Your own win rates</h2><p class="fine">An imported JSON file remains selected after reloading and switching languages. Use published data to switch back.</p><div class="row wrap" style="margin-top:14px"><button class="btn" data-action="import-meta">${icon('upload')}Import file</button>${m?'<button class="btn ghost" data-action="clear-meta">Remove win rates</button>':''}</div><details class="fold inner"><summary>File format ${icon('chevrondown')}</summary><pre class="code">${esc(sample)}</pre><p class="fine">Champion IDs as in Data Dragon, roles: TOP, JUNGLE, MIDDLE, BOTTOM, UTILITY. The numbers in the example are placeholders only.</p></details></section>
  <section class="card"><h2 class="card-title">How the recommendation works</h2><ol class="steps-list">${steps.map(([t,d])=>`<li><strong>${t}</strong><br><span class="fine">${d}</span></li>`).join('')}</ol><p class="fine" style="margin-top:12px">If a factor is missing, it is left out and the remaining weights are redistributed. Roles and archetypes are maintained by hand.</p></section>
  <section class="card"><h2 class="card-title">Legal</h2><p class="fine">Riftroom is not endorsed by Riot Games and does not reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games and all associated properties are trademarks or registered trademarks of Riot Games, Inc.</p></section>
  </div>`;
@@ -886,7 +888,7 @@ function showExport(){
  $('#confirm-dialog').innerHTML=`<div class="dlg-head"><div><h2 id="confirm-title">Backup</h2><p class="fine" style="margin-top:4px">Copy the text and save it as a .json file. Use “Import backup” to restore it.</p></div><button class="icon-btn" data-action="cancel-confirm" aria-label="Close">${icon('close')}</button></div><textarea id="export-text" class="field code" rows="12" readonly aria-label="Sicherung als JSON">${esc(JSON.stringify(data,null,2))}</textarea><div class="dlg-actions"><button class="btn" data-action="cancel-confirm">Close</button><button class="btn primary" data-action="copy-export">Copy</button></div>`;
  $('#confirm-dialog').showModal();
 }
-function pickFile(kind){const input=document.createElement('input');input.type='file';input.accept='.json,application/json';input.onchange=async()=>{try{const file=input.files?.[0];if(!file)return;if(file.size>5*1024*1024)throw Error('The file can be at most 5 MB.');const raw=JSON.parse((await file.text()).replace(/^﻿/,''));if(kind==='meta'){const data=validateMeta(raw,new Set(catalog.champions.map(c=>c.id)));state.meta=data;save();render();toast(`Win rates from ${data.source} imported. ${status().ok?'They are used in recommendations.':status().label+': not included.'}`);}else{const data=validateState(raw,catalog);confirmDialog('Restore backup?','Team, draft, settings and win rates will be replaced by the selected backup.',()=>{state=data;save();render();toast('Backup restored.');});}}catch(e){toast('Import failed: '+e.message,true);}};input.click();}
+function pickFile(kind){const input=document.createElement('input');input.type='file';input.accept='.json,application/json';input.onchange=async()=>{try{const file=input.files?.[0];if(!file)return;if(file.size>5*1024*1024)throw Error('The file can be at most 5 MB.');const raw=JSON.parse((await file.text()).replace(/^﻿/,''));if(kind==='meta'){const data=validateMeta(raw,new Set(catalog.champions.map(c=>c.id)));state.meta=data;state.metaMode='imported';save();render();toast(`Win rates from ${data.source} imported. ${status().ok?'They are used in recommendations.':status().label+': not included.'}`);}else{const data=validateState(raw,catalog);confirmDialog('Restore backup?','Team, draft, settings and win rates will be replaced by the selected backup.',()=>{state=data;save();render();toast('Backup restored.');});}}catch(e){toast('Import failed: '+e.message,true);}};input.click();}
 
 /* ---------- Gemeinsame Datenbank ---------- */
 let db=null,teamRef=null,lastSharedJson='',pushing=false,teamReadOnly=false;
@@ -914,14 +916,26 @@ function applyRemoteTeam(snap){
 }
 // Datenquellen: in Claude die gemeinsame Datenbank, in der eigenständigen Version (GitHub) die Datei data/meta.json.
 function onCatalog(c){if(c?.champions?.length>=100&&c.version!==catalog.version){const en=new Map(catalog.champions.map(x=>[x.id,x]));catalog={...c,champions:c.champions.map(x=>en.has(x.id)?{...x,name:en.get(x.id).name,title:en.get(x.id).title}:x)};render();}}
-function onCurrent(d){if(!d)return;try{state.meta=validateMeta(d.snapshot,champIds());state.meta.source=state.meta.source.replace('inoffizielle Abfrage, nicht von Riot','unofficial query, not from Riot');state.lastChecked=d.snapshot.updatedAt;render();}catch{}}
+function onCurrent(d){if(!d)return;try{publishedMeta=validateMeta(d.snapshot,champIds());if(acceptPublishedMeta(state,publishedMeta)){save();render();}}catch{}}
 function onPrevious(d){if(!d)return;try{prevMeta=validateMeta(d.snapshot,champIds());render();}catch{}}
 // Best in Slot (Master+): täglich aktualisiert. Nur übernehmen, wenn das Format stimmt.
 function onBis(b){try{if(!b||!b.roles||!ROLES.every(r=>Array.isArray(b.roles[r])&&b.roles[r].length>=3&&b.roles[r].every(x=>Array.isArray(x)&&typeof x[0]==='string'&&isFinite(x[1])&&isFinite(x[2]))))return;BIS.solo={label:String(b.label||'Solo Queue Master+'),patch:String(b.patch||''),region:String(b.region||'Global'),asOf:String(b.asOf||''),roles:Object.fromEntries(ROLES.map(r=>[r,b.roles[r].slice(0,6).map(x=>[x[0],Number(x[1]),Number(x[2]),Number(x[3])||0])]))};if(page==='team')render();}catch{}}
-async function loadStatic(){
- try{const r=await fetch('data/meta.json',{cache:'no-cache'});if(!r.ok)throw Error();const d=await r.json();onCatalog(d.catalog);onCurrent(d.current);onPrevious(d.previous);onBis(d.bis);}
- catch{refreshMessage='The win rates couldn\'t be loaded right now. Check your internet connection and reload the page.';render();}
+async function loadStatic(usePublished=false){
+ if(metaLoading)return;
+ const selection=state.meta,mode=state.metaMode;
+ metaLoading=true;refreshMessage='';render();
+ try{
+  const bundle=await fetchPublishedBundle(catalog,validateMeta);
+  catalog=bundle.catalog;publishedMeta=bundle.snapshot;prevMeta=bundle.previous;
+  if(usePublished&&state.meta===selection&&state.metaMode===mode)state.metaMode='published';
+  state.lastChecked=new Date().toISOString();
+  acceptPublishedMeta(state,publishedMeta,state.lastChecked);onBis(bundle.bis);save();
+  refreshMessage='Published data checked. Snapshot: '+date(publishedMeta.updatedAt)+(state.metaMode==='published'?'':
+   ' Your selected data source is unchanged.');
+ }catch{refreshMessage='Update failed. Check your connection and try again. Your previous data is retained.';}
+ finally{metaLoading=false;bannerClosed=false;render();}
 }
+
 async function connect(){
  try{db=window.claude?.use?await window.claude.use('db'):null;}catch{db=null;}
  if(!db){if(STANDALONE){loadStatic();return;}refreshMessage='Offline: Without signing in to Claude your data stays in this browser, and there are no win rates.';render();return;}
@@ -1009,8 +1023,10 @@ document.addEventListener('click',e=>{
  if(action==='hide-checklist'){guide.hide(true);render();toast('Checklist hidden. Use the ? at the top to bring the introduction back.');}
  if(action==='tour'){const n=el.dataset.tourName;if(n==='team'){page='team';saveUi();render();startTour('team',el.dataset.tourStep);}else helpTour();}
  if(action==='import-team')pickFile('team');
+ if(action==='refresh-meta')loadStatic();
+ if(action==='use-published-meta')loadStatic(true);
  if(action==='import-meta')pickFile('meta');
- if(action==='clear-meta')confirmDialog('Remove win rates?','The win rates will be removed from this browser.',()=>{state.meta=null;save();render();});
+ if(action==='clear-meta')confirmDialog('Remove win rates?','The win rates will be removed from this browser.',()=>{state.meta=null;state.metaMode='disabled';save();render();});
 });
 document.addEventListener('dblclick',e=>{const el=e.target.closest('[data-hover]');if(el&&!el.disabled){selectHover(el.dataset.hover);lockIn();}});
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&hoverId&&e.target.id!=='cs-search'&&!['TEXTAREA','INPUT','SELECT','BUTTON'].includes(e.target.tagName)&&$('#cs-lock'))lockIn();});

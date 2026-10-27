@@ -73,7 +73,7 @@ export function biggestChanges(cur, prev, n = 5, minGames = 5000) {
     if (d != null) rows.push({id: e.champion, role: e.role, wr: wr(e) * 100, delta: d, games: e.games});
   }
   rows.sort((a, b) => b.delta - a.delta);
-  return {risers: rows.slice(0, n), fallers: rows.slice(-n).reverse().filter(r => r.delta < 0)};
+  return {risers: rows.filter(r => r.delta > 0).slice(0, n), fallers: rows.slice(-n).reverse().filter(r => r.delta < 0)};
 }
 
 // Turnier-Reihenfolge (Solo Queue und Turniere): B = blaue Seite, R = rote Seite.

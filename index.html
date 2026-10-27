@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en" data-standalone="1">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Riftroom Draft Lab</title>
+<meta name="description" content="Your room for better League of Legends drafts: champion pools, team composition and transparent meta data.">
+<meta name="theme-color" content="#0e1116">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="fonts/fonts.css">
+<link rel="stylesheet" href="style.css">
+<script src="splash.js"></script>
+</head>
+<body>
+<div id="splash" aria-hidden="true">
+  <div class="sp-rift"><i class="sp-beam b"></i><i class="sp-beam r"></i><i class="sp-flash"></i></div>
+  <div class="sp-core">
+    <div class="sp-logo"><span class="sp-ring"></span><svg viewBox="0 0 64 64"><rect width="64" height="64" rx="17" fill="#c6f36b"/><path d="M18 47V17h19c15 0 15 20 1 21l11 9H35L23 35h12c6 0 6-8 0-8H28v20z" fill="#111410"/></svg></div>
+    <div class="sp-word"><span>R</span><span>I</span><span>F</span><span>T</span><span>R</span><span>O</span><span>O</span><span>M</span></div>
+    <div class="sp-sub">Draft Lab</div>
+  </div>
+</div>
+<div id="app"><div class="boot">Riftroom …</div></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<dialog id="picker" aria-labelledby="picker-title"></dialog>
+<dialog id="confirm-dialog" aria-labelledby="confirm-title"></dialog>
+<script type="module" src="boot.js"></script>
+</body>
+</html>

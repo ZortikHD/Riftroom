@@ -30,7 +30,7 @@ let state=initialState(),catalog,page='draft',metaTab='pool',refreshMessage='',t
 let lastBoard=null,lastComp=null;
 function clearDraftView(){analysisText='';lastBoard=null;csKey=null;}
 // Übungs-Draft: läuft nur in diesem Browser. Der echte Draft wird vorher gesichert und danach zurückgeholt.
-let practice=null,pendingRemote=null,prSide='blue',prTimer=true;
+let practice=null,pendingRemote=null,prSide='blue',prTimer=true,prFearless=false;
 // KI-Spielplan je Draft (nur im Speicher dieser Sitzung).
 const planNotes=new Map();
 const isNew=(type,i)=>!!(lastBoard&&state[type][i]&&lastBoard[type][i]!==state[type][i]);
@@ -75,7 +75,7 @@ const opggMulti=o=>{const ids=o.players.map(p=>p.riotId).filter(r=>r.includes('#
 const opggProfile=(o,riotId)=>{const i=riotId.lastIndexOf('#');return`https://op.gg/lol/summoners/${o.region}/${encodeURIComponent(riotId.slice(0,i).trim())}-${encodeURIComponent(riotId.slice(i+1).trim())}`;};
 const metaFor=(id,role)=>state.meta?.entries.find(e=>e.champion===id&&e.role===role);
 const selOpp=()=>state.opponents.find(o=>o.id===selectedOpponent)||state.opponents[0]||null;
-const taken=()=>new Set([...state.allies,...state.enemies,...state.bans].filter(Boolean));
+const taken=()=>new Set([...state.allies,...state.enemies,...state.bans,...(state.fearless?.used||[])].filter(Boolean));
 
 let lastPageRendered=null,bannerClosed=false,lastInk=null;
 // Grüne Linie unter dem aktiven Tab: gleitet beim Seitenwechsel vom alten zum neuen Tab.
@@ -115,7 +115,7 @@ function render(){
  const chip=st.ok?`<span class="chip ok" title="Win rates from ${esc(m.source)}, as of ${date(m.updatedAt)}"><span class="dot"></span>Patch ${esc(shortPatch(currentPatch()))}${st.fallback?` · Winrates ${esc(shortPatch(m.patch))}`:''}</span>`:`<span class="chip" title="${refreshMessage.startsWith('Offline')?esc(refreshMessage):''}"><span class="dot"></span>${m?esc(st.label):refreshMessage.startsWith('Offline')?'Offline':'No win rates'}</span>`;
  const views={plan:renderPlan,draft:renderDraft,meta:renderMeta,opponents:renderOpponents,team:renderTeam,games:renderGames,mini:()=>renderMini(miniCtx),settings:renderSettings};
  app.innerHTML=`<header class="top"><div class="top-in"><button class="brand" data-page="draft"><img src="icon.svg" alt="">Riftroom</button><nav class="tabs" aria-label="Main navigation">${nav}</nav><div class="top-right">${chip}${installEvt?`<button class="install-btn" data-action="install" title="Install Riftroom as an app">${icon('download')}<span>App</span></button>`:''}<button class="lang-btn" data-action="lang" title="Auf Deutsch umstellen" aria-label="Language: English. Switch to German">DE</button><button class="help-btn" data-action="tour" title="Show introduction" aria-label="Show introduction">?</button></div></div></header>
- <main class="page ${page!==lastPageRendered?'enter':''}">${bannerHtml()}${roomBarHtml()}<div class="page-body" ${viewerLocked()?'inert':''}>${views[page]()}</div></main>
+ <main class="page ${page!==lastPageRendered?'enter':''}">${bannerHtml()}${roomBarHtml()}<div class="page-body ${room?.role==='viewer'?'viewer':''}" ${viewerLocked()?'inert':''}>${views[page]()}</div></main>
  <footer class="foot"><div class="foot-in">Fan project, not endorsed by Riot Games. <button class="link" data-page="settings">Data sources and legal</button></div></footer>`;
  placeTabInk();decorateEmpty();
  lastPageRendered=page;
@@ -141,7 +141,7 @@ function renderDraft(){
  if(key!==csKey){csKey=key;hoverId=null;pickRole=null;csSearch='';csRole=tgt&&tgt.type!=='bans'?ROLES[tgt.index]:'ALL';}
  const opp=activeOpp(),aiTurn=practice&&c&&c.who==='them';
  // Kopf
- const sub=`${state.side==='red'?'Red':'Blue'} side · vs ${esc(opp?.name||(practice?'the computer':'Opponent'))}${practice?' · Practice':''}`;
+ const sub=`${state.side==='red'?'Red':'Blue'} side · vs ${esc(opp?.name||(practice?'the computer':'Opponent'))}${practice?' · Practice':''}${state.fearless?` · Fearless game ${state.fearless.game}`:''}`;
  const actions=(t.finished?`<button class="btn small primary" data-page="plan">${icon('map')}Game plan</button><button class="btn small" data-action="copy-discord">${icon('copy')}For Discord</button>${practice?'':'<button class="btn small" data-action="log-game">Log game</button>'}`:'')
   +(!practice&&undoStack.length&&!t.finished?`<button class="btn small" data-action="undo">${icon('back')}Undo</button>`:'')
   +`<button class="btn ghost small" data-action="draft-end">${t.finished?'New draft':practice?'End practice':'Cancel'}</button>`;
@@ -159,7 +159,7 @@ function renderDraft(){
  // Bans
  const ban=i=>{const id=state.bans[i],act=tgt?.type==='bans'&&tgt.index===i;return`<span class="cs-ban ${id?'filled':''} ${id==='none'?'none':''} ${act?'active':''} ${isNew('bans',i)?'just':''}" title="${id?esc(cname(id)):act?'Ban in progress':'Ban '+(i%5+1)}">${id==='none'?'<span class="no-ban">–</span>':id?portrait(id,''):act&&hoverId?`<img class="ghost" src="${SQUARE[hoverId]||'icon.svg'}" alt="">`:''}</span>`;};
  const bans=`<div class="cs-bans"><div class="cs-ban-row side-${ours}">${[0,1,2,3,4].map(ban).join('')}</div><span class="fine">Bans</span><div class="cs-ban-row side-${theirs} rev">${[5,6,7,8,9].map(ban).join('')}</div></div>`;
- const html=head('Draft',sub,actions)+phase+bans+`<div class="cs-grid-wrap">${teamColumn('allies',ours,tgt,t)}${renderCenter(t,c,tgt,aiTurn)}${teamColumn('enemies',theirs,tgt,t)}</div>`+renderDraftExtras();
+ const html=head('Draft',sub,actions)+phase+bans+flUsedHtml()+`<div class="cs-grid-wrap">${teamColumn('allies',ours,tgt,t)}${renderCenter(t,c,tgt,aiTurn)}${teamColumn('enemies',theirs,tgt,t)}</div>`+renderDraftExtras();
  lastBoard={allies:[...state.allies],enemies:[...state.enemies],bans:[...state.bans]};lastComp=composition(state.allies);
  return html;
 }
@@ -182,7 +182,7 @@ function teamColumn(type,side,tgt,t){
   const fx=!us&&id?enemyInfo.flex.get(i):null;
   const ps=us&&!id&&!t.finished?poolStatus(i):'';
   const attrs=canTarget?`data-cs-target="${type}|${i}"`:t.finished&&!practice?`data-picker="${type}" data-index="${i}"`:'';
-  return`<div data-slot="${type}|${i}" class="cs-row ${id?'filled':''} ${act?'active':''} ${isNew(type,i)?'just':''}">${attrs?`<button class="cs-row-btn" ${attrs} aria-label="${us?'Your':'Opponent'} ${ROLE_NAMES[ROLES[i]]}${id?': '+esc(cname(id)):''}"></button>`:''}${img?`<img class="cs-splash ${prev&&!id?'ghost':''}" src="${LOADING[img]||SQUARE[img]||'icon.svg'}" alt="">`:''}<div class="cs-row-text"><span class="role-label">${ROLE_NAMES[ROLES[i]]}${fx?'?':''}</span><strong>${name||'<span class="muted">—</span>'}</strong>${us?`<span class="fine">${who}</span>`:''}${fx?`<span class="flex-note" title="Can play several roles. Only later will you know which."><i class="flex-tag">Flex</i>${fx.map(r=>ROLE_NAMES[r]).join(' / ')}</span>`:''}${ps}</div>${id?`<button class="cs-swap" data-swap="${type}|${i}" title="Swap role or change pick" aria-label="${esc(cname(id))}: swap role or change pick">${icon('swap')}</button>`:''}${!us&&id?`<button class="cs-mu ${mu?'has':''}" data-mu-edit="${id}" title="${mu?esc(mu):'Matchup note on '+esc(cname(id))}" aria-label="Matchup note on ${esc(cname(id))}">${icon('book')}</button>`:''}</div>`;}).join('');
+  return`<div data-slot="${type}|${i}" class="cs-row ${id?'filled':''} ${act?'active':''} ${isNew(type,i)?'just':''}">${attrs?`<button class="cs-row-btn" ${attrs} aria-label="${us?'Your':'Opponent'} ${ROLE_NAMES[ROLES[i]]}${id?': '+esc(cname(id)):''}"></button>`:''}${img?`<img class="cs-splash ${prev&&!id?'ghost':''}" src="${LOADING[img]||SQUARE[img]||'icon.svg'}" alt="">`:''}<div class="cs-row-text"><span class="role-label">${ROLE_NAMES[ROLES[i]]}${fx?'?':''}</span><strong>${name||'<span class="muted">—</span>'}</strong>${us?`<span class="fine">${who}</span>`:''}${us?wishChip(i):''}${fx?`<span class="flex-note" title="Can play several roles. Only later will you know which."><i class="flex-tag">Flex</i>${fx.map(r=>ROLE_NAMES[r]).join(' / ')}</span>`:''}${ps}</div>${id?`<button class="cs-swap" data-swap="${type}|${i}" title="Swap role or change pick" aria-label="${esc(cname(id))}: swap role or change pick">${icon('swap')}</button>`:''}${!us&&id?`<button class="cs-mu ${mu?'has':''}" data-mu-edit="${id}" title="${mu?esc(mu):'Matchup note on '+esc(cname(id))}" aria-label="Matchup note on ${esc(cname(id))}">${icon('book')}</button>`:''}</div>`;}).join('');
  return`<section class="cs-team side-${side} ${us?'ours':'theirs'}"><div class="cs-team-head"><span class="side-tag ${side}">${esc(us?state.teamName:(activeOpp()?.name||'Opponent'))}</span></div>${rows}</section>`;
 }
 // Vorschläge für den aktuellen Schritt.
@@ -229,13 +229,13 @@ function roleAdvice(){
  }).sort((a,b)=>b.score-a.score||a.i-b.i);
 }
 function renderCenter(t,c,tgt,aiTurn){
- if(t.finished)return`<section class="card cs-center cs-done"><div class="cs-done-in">${icon('map','big')}<h2>Draft complete</h2><p class="fine">The game plan shows the map with all champions and short notes for every position.</p><button class="btn primary" data-page="plan">Open game plan</button>${practice?'<button class="btn ghost small" data-action="practice-again">Practice again</button>':''}</div></section>`;
- if(room?.role==='viewer')return`<section class="card cs-center cs-wait"><div class="cs-done-in"><div class="spinner"></div><p>${c.who==='us'?`${esc(state.teamName)} ${c.type==='ban'?'bans':'picks'} …`:`${esc(state.teamName)} is entering ${c.type==='ban'?'the enemy ban':'the enemy pick'} …`}</p><p class="fine">You're watching live. Every ban and pick appears instantly.</p></div></section>`;
+ if(t.finished)return`<section class="card cs-center cs-done"><div class="cs-done-in">${icon('map','big')}<h2>Draft complete</h2><p class="fine">The game plan shows the map with all champions and short notes for every position.</p><button class="btn primary" data-page="plan">Open game plan</button>${state.fearless&&room?.role!=='viewer'?flNextHtml():''}${practice?'<button class="btn ghost small" data-action="practice-again">Practice again</button>':''}</div></section>`;
+ if(room?.role==='viewer'&&c.who!=='us')return`<section class="card cs-center cs-wait"><div class="cs-done-in"><div class="spinner"></div><p>${c.who==='us'?`${esc(state.teamName)} ${c.type==='ban'?'bans':'picks'} …`:`${esc(state.teamName)} is entering ${c.type==='ban'?'the enemy ban':'the enemy pick'} …`}</p><p class="fine">You're watching live. Every ban and pick appears instantly.</p></div></section>`;
  if(aiTurn)return`<section class="card cs-center cs-wait"><div class="cs-done-in"><div class="spinner"></div><p>The computer ${c.type==='ban'?'bans':'picks'} …</p></div></section>`;
  const sug=stepSuggestions(c,tgt);
  const adv=c.who==='us'&&c.type==='pick'?roleAdvice():[],curRole=pickRole!=null?pickRole:tgt?.index;
  const advHtml=adv.length?`<div class="role-adv"><span class="label">Which role should pick now?</span><div class="role-adv-row">${adv.map((x,k)=>`<button class="ra ${k===0?'best':''} ${x.i===curRole?'on':''}" data-ra="${x.i}" aria-pressed="${x.i===curRole}">${k===0?'<i class="ra-star" aria-hidden="true">★</i>':''}<b>${ROLE_NAMES[ROLES[x.i]]}</b><small>${esc(x.reasons[0])}</small></button>`).join('')}</div></div>`:'';
- const sugHtml=advHtml+(sug.title&&sug.items.length?`<div class="cs-sug"><span class="label">${sug.title}</span><div class="cs-sug-row">${sug.items.map(x=>`<button class="cs-sug-item ${hoverId===x.id?'on':''}" data-hover="${x.id}">${portrait(x.id,'av sm')}<span><b>${esc(cname(x.id))}${c.type==='pick'&&(profileOf(x.id)?.roles.length||0)>1?'<i class="flex-tag" title="Can play several roles">Flex</i>':''}</b><small class="${x.top?'why':''}">${esc(x.note)}</small></span>${x.score!=null?`<span class="mini-score">${x.score}</span>`:''}</button>`).join('')}</div></div>`:'');
+ const sugHtml=`<div id="team-wish">${teamWishHtml(c)}</div>`+advHtml+(sug.title&&sug.items.length?`<div class="cs-sug"><span class="label">${sug.title}</span><div class="cs-sug-row">${sug.items.map(x=>`<button class="cs-sug-item ${hoverId===x.id?'on':''}" data-hover="${x.id}">${portrait(x.id,'av sm')}<span><b>${esc(cname(x.id))}${c.type==='pick'&&(profileOf(x.id)?.roles.length||0)>1?'<i class="flex-tag" title="Can play several roles">Flex</i>':''}</b><small class="${x.top?'why':''}">${esc(x.note)}</small></span>${x.score!=null?`<span class="mini-score">${x.score}</span>`:''}</button>`).join('')}</div></div>`:'');
  const roles=['ALL',...ROLES];
  return`<section class="card cs-center">${sugHtml}<div class="cs-filter"><div class="search">${icon('search')}<input class="field" id="cs-search" placeholder="Search champion" value="${esc(csSearch)}" autocomplete="off" aria-label="Search champion"></div><button class="pool-toggle" data-cs-pool aria-pressed="${csPoolOnly}" title="Only show champions from your pools">Pools only</button><div class="seg cs-roles" role="group" aria-label="Role">${roles.map(r=>`<button data-cs-role="${r}" aria-pressed="${csRole===r}">${r==='ALL'?'All':ROLE_NAMES[r]}</button>`).join('')}</div></div><div class="cs-champs" id="cs-grid">${csGrid()}</div><div class="cs-lock" id="cs-lock">${lockBar()}</div></section>`;
 }
@@ -244,10 +244,12 @@ function csGrid(){
  const pools=csPoolOnly?new Set(state.players.flatMap(p=>p.pool.map(v=>v.id))):null;
  const base=[...catalog.champions].filter(c=>!pools||pools.has(c.id));
  const list=q?searchChamps(base,q):base.filter(c=>csRole==='ALL'||profileOf(c.id)?.roles.includes(csRole)).sort((a,b)=>a.name.localeCompare(b.name,'de'));
- return list.map(c=>`<button class="champ-btn ${hoverId===c.id?'on':''}" data-hover="${c.id}" ${tk.has(c.id)?'disabled':''} aria-label="${esc(c.name)}${tk.has(c.id)?' (vergeben)':''}">${portrait(c.id,'')}<span>${esc(c.name)}</span></button>`).join('')||'<div class="no-results">No champion found.</div>';
+ const fl=new Set(state.fearless?.used||[]);
+ return list.map(c=>`<button class="champ-btn ${hoverId===c.id?'on':''} ${fl.has(c.id)?'fl':''}" data-hover="${c.id}" ${tk.has(c.id)?'disabled':''} aria-label="${esc(c.name)}${tk.has(c.id)?' (vergeben)':''}">${portrait(c.id,'')}<span>${esc(c.name)}</span></button>`).join('')||'<div class="no-results">No champion found.</div>';
 }
 function lockBar(){
  const t=draftTurn(state),c=t.current;if(!c)return'';
+ if(room?.role==='viewer')return viewerLockBar(c);
  const verb=c.type==='ban'?(c.who==='us'?'Ban':'Enter opponent ban'):(c.who==='us'?'Pick':'Enter opponent pick');
  const noBan=c.type==='ban'&&!(practice&&c.who!=='us')?`<button class="btn ghost small" data-action="no-ban" title="If no champion was banned">No ban</button>`:'';
  if(!hoverId)return`<span class="fine">Choose a champion. Double-click confirms right away.</span><span class="lock-actions">${noBan}<button class="btn primary" disabled>${verb}</button></span>`;
@@ -268,10 +270,10 @@ function suggestRole(id,c,tgt){
  if(open.includes(tgt.index)&&roles.includes(ROLES[tgt.index]))return tgt.index;
  const m=open.find(i=>roles.includes(ROLES[i]));return m!=null?m:(open.includes(tgt.index)?tgt.index:open[0]);
 }
-function selectHover(id){
+function selectHover(id,forced=null){
  if(taken().has(id))return;
  hoverId=id;
- {const t=draftTurn(state),c=t.current;if(c&&c.type==='pick'&&!(practice&&c.who!=='us')){const r=suggestRole(id,c,stepTarget(c));if(r!==pickRole){pickRole=r;render();return;}}}
+ {const t=draftTurn(state),c=t.current;if(c&&c.type==='pick'&&!(practice&&c.who!=='us')){const r=forced!=null&&openSlots(c.who==='us'?'allies':'enemies').includes(forced)?forced:suggestRole(id,c,stepTarget(c));if(r!==pickRole){pickRole=r;render();return;}}}
  document.querySelectorAll('[data-hover]').forEach(b=>b.classList.toggle('on',b.dataset.hover===id));
  const lb=$('#cs-lock');if(lb)lb.innerHTML=lockBar();
  const cc=$('#comp-card');if(cc)cc.innerHTML=compCardHtml();
@@ -292,7 +294,7 @@ function lockSplash(id,who,roleIndex){
  host.appendChild(el);setTimeout(()=>el.remove(),1300);
 }
 function lockIn(){
- if(viewerLocked())return;
+ if(room?.role==='viewer'){viewerSend();return;}
  const t=draftTurn(state),c=t.current;if(!c||!hoverId)return;
  if(practice&&c.who!=='us')return;
  let tgt=stepTarget(c);if(!tgt||tgt.index==null||tgt.index<0)return;
@@ -398,8 +400,8 @@ function helpTour(){
  startTour('welcome');
 }
 let prMode='real';
-try{const d=JSON.parse(localStorage.getItem('riftroom.draftopts')||'{}');if(d.side==='red')prSide='red';if(d.mode==='ai')prMode='ai';if(d.timer===false)prTimer=false;}catch{}
-const saveDraftOpts=()=>{try{localStorage.setItem('riftroom.draftopts',JSON.stringify({side:prSide,mode:prMode,timer:prTimer}));}catch{}};
+try{const d=JSON.parse(localStorage.getItem('riftroom.draftopts')||'{}');if(d.side==='red')prSide='red';if(d.mode==='ai')prMode='ai';if(d.timer===false)prTimer=false;if(d.fearless===true)prFearless=true;}catch{}
+const saveDraftOpts=()=>{try{localStorage.setItem('riftroom.draftopts',JSON.stringify({side:prSide,mode:prMode,timer:prTimer,fearless:prFearless}));}catch{}};
 // Rolle eines Picks ändern (tauscht mit dem anderen Slot) oder den Pick korrigieren.
 function openSwapDialog(type,i){
  const id=state[type][i];if(!id)return;confirmAction=null;
@@ -415,19 +417,34 @@ function openDraftDialog(){
  <div class="log-form">
   <div><span class="field-label">Your side</span><div class="seg wide side-pick" role="group" aria-label="Your side"><button data-pr-side="blue" aria-pressed="${prSide==='blue'}">Blue</button><button data-pr-side="red" aria-pressed="${prSide==='red'}">Red</button></div></div>
   <div><span class="field-label">Opponent</span><div class="seg wide" role="group" aria-label="Opponent"><button data-pr-mode="real" aria-pressed="${prMode==='real'}">Real game</button><button data-pr-mode="ai" aria-pressed="${prMode==='ai'}">Vs computer</button></div><p class="fine" id="pr-mode-hint" style="margin-top:6px">${prMode==='ai'?'Practice against the computer. Only in this browser.':'You enter the opponent picks. The team sees the draft live.'}</p></div>
+  <div><span class="field-label">Mode</span><div class="seg wide" role="group" aria-label="Mode"><button data-pr-fearless="off" aria-pressed="${!prFearless}">Single game</button><button data-pr-fearless="on" aria-pressed="${prFearless}">Fearless series</button></div><p class="fine" id="pr-fl-hint" style="margin-top:6px">${prFearless?FL_HINT:'A normal draft.'}</p></div>
   <div id="pr-timer-row" ${prMode==='ai'?'':'hidden'}><span class="field-label">Timer per step</span><div class="seg wide" role="group" aria-label="Timer"><button data-pr-timer="on" aria-pressed="${prTimer}">30 seconds</button><button data-pr-timer="off" aria-pressed="${!prTimer}">No timer</button></div></div>
   ${state.opponents.length?`<div><label class="field-label" for="pr-opp">Opponent team (optional)</label><select class="field" id="pr-opp" style="width:100%"><option value="">None</option>${state.opponents.map(o=>`<option value="${esc(o.id)}" ${o.id===state.opponentId?'selected':''}>${esc(o.name)}</option>`).join('')}</select></div>`:''}
  </div>
  <div class="dlg-actions"><button class="btn" data-action="cancel-confirm">Cancel</button><button class="btn primary" data-action="draft-start">Let's go</button></div>`;
  $('#confirm-dialog').showModal();
 }
-function startRealDraft(side,opponentId){
- guide.markDrafted();
- Object.assign(state,{allies:Array(5).fill(null),enemies:Array(5).fill(null),bans:Array(10).fill(null),draftMode:'tournament',side,opponentId,selectedRole:0,draftActive:true});
+// Fearless-Serie: Wer in einem Spiel der Serie gepickt wurde, ist danach für beide Teams gesperrt (Bans zählen nicht).
+const FL_HINT='Anything picked in a game is locked for both teams for the rest of the series. The pro leagues have played this way since 2025.';
+function flUsedHtml(){
+ const f=state.fearless;if(!f)return'';
+ return`<div class="fl-used"><span class="fl-tag">Fearless</span><span class="fine">Game ${f.game}${f.used.length?` · ${f.used.length} locked`:' · nothing locked yet'}</span>${f.used.length?`<div class="fl-row">${f.used.map(id=>`<img src="${SQUARE[id]}" alt="${esc(cname(id))}" title="${esc(cname(id))}">`).join('')}</div>`:''}</div>`;
+}
+function flNextHtml(){return`<div class="fl-next"><span class="fine">Next game of the series, your side:</span><div class="row"><button class="btn" data-fl-next="blue">Blue</button><button class="btn" data-fl-next="red">Red</button></div></div>`;}
+function fearlessNext(side){
+ const f=state.fearless;if(!f)return;
+ const next={game:f.game+1,used:[...new Set([...f.used,...state.allies,...state.enemies].filter(Boolean))]};
+ if(practice)startPractice({timer:practice.timer,side,opponentId:state.opponentId,fearless:next});else startRealDraft(side,state.opponentId,next);
+ toast(`Game ${next.game} of the Fearless series: ${next.used.length} champions are locked.`);
+}
+function startRealDraft(side,opponentId,fearless=prFearless?{game:1,used:[]}:null){
+ guide.markDrafted();resetTeamWishes();
+ Object.assign(state,{allies:Array(5).fill(null),enemies:Array(5).fill(null),bans:Array(10).fill(null),draftMode:'tournament',side,opponentId,selectedRole:0,draftActive:true,fearless});
  undoStack=[];clearDraftView();page='draft';save();render();window.scrollTo({top:0,behavior:'instant'});
 }
 function endDraft(){
- Object.assign(state,{allies:Array(5).fill(null),enemies:Array(5).fill(null),bans:Array(10).fill(null),draftActive:false,selectedRole:0});
+ resetTeamWishes();
+ Object.assign(state,{allies:Array(5).fill(null),enemies:Array(5).fill(null),bans:Array(10).fill(null),draftActive:false,selectedRole:0,fearless:null});
  undoStack=[];clearDraftView();save();render();
 }
 function renderTemplates(){
@@ -491,7 +508,7 @@ function renderPlan(){
  const key=draftKey();let n=planNotes.get(key);
  if(!n){if(STANDALONE)n={status:'off'};else{n={status:'loading',pending:true};setTimeout(()=>generatePlan(key),0);}planNotes.set(key,n);}
  const ours=state.draftMode==='tournament'&&state.side==='red'?'red':'blue',opp=activeOpp();
- const actions=`${back}<button class="btn small" data-action="copy-discord">${icon('copy')}For Discord</button>${n.status!=='loading'&&n.status!=='off'?`<button class="btn small" data-action="plan-regen">${icon('refresh')}New notes</button>`:''}${practice?'':`<button class="btn small primary" data-action="log-game">Log game</button>`}`;
+ const actions=`${back}<button class="btn small" data-action="copy-discord">${icon('copy')}For Discord</button>${n.status!=='loading'&&n.status!=='off'?`<button class="btn small" data-action="plan-regen">${icon('refresh')}New notes</button>`:''}${practice||room?.role==='viewer'?'':`<button class="btn small primary" data-action="log-game">Log game</button>`}`;
  const note=n.status==='loading'?`<div class="banner ai-wait">${icon('spark')}Claude is writing notes for every position<span>.</span><span>.</span><span>.</span></div>`
   :n.status==='unavailable'?'<div class="banner">AI notes are only available when the page is opened signed in to Claude. You still see the map, power curve and your matchup notes.</div>'
   :n.status==='error'?`<div class="banner warn">${n.code==='not_granted'?'AI notes were not allowed. You can change this in the page’s permission menu.':n.code==='rate_limited'?'Too many requests right now. Try again in a minute.':'The notes could not be created.'} <button class="link" data-action="plan-regen">Try again</button></div>`:'';
@@ -591,10 +608,10 @@ function copyText(text,title){
 
 /* ---------- Übungs-Draft gegen den Computer ---------- */
 function startPractice(opts){guide.markDrafted();
- if(!practice)practice={snapshot:{draftActive:state.draftActive,allies:[...state.allies],enemies:[...state.enemies],bans:[...state.bans],draftMode:state.draftMode,side:state.side,opponentId:state.opponentId,selectedRole:state.selectedRole}};
+ if(!practice)practice={snapshot:{draftActive:state.draftActive,allies:[...state.allies],enemies:[...state.enemies],bans:[...state.bans],draftMode:state.draftMode,side:state.side,opponentId:state.opponentId,selectedRole:state.selectedRole,fearless:state.fearless}};
  clearTimeout(practice.ai);clearInterval(practice.tick);
  Object.assign(practice,{timer:opts.timer,stepKey:null,deadline:null});
- Object.assign(state,{allies:Array(5).fill(null),enemies:Array(5).fill(null),bans:Array(10).fill(null),draftMode:'tournament',side:opts.side,opponentId:opts.opponentId,selectedRole:0});
+ Object.assign(state,{allies:Array(5).fill(null),enemies:Array(5).fill(null),bans:Array(10).fill(null),draftMode:'tournament',side:opts.side,opponentId:opts.opponentId,selectedRole:0,fearless:opts.fearless||null});
  clearDraftView();page='draft';
  practiceCheck();render();window.scrollTo({top:0,behavior:'instant'});
 }
@@ -636,7 +653,7 @@ function tickTimer(){
 function endPractice(){
  if(!practice)return;clearTimeout(practice.ai);clearInterval(practice.tick);
  const s=practice.snapshot;practice=null;
- Object.assign(state,{draftActive:s.draftActive,allies:s.allies,enemies:s.enemies,bans:s.bans,draftMode:s.draftMode,side:s.side,opponentId:s.opponentId,selectedRole:s.selectedRole});
+ Object.assign(state,{draftActive:s.draftActive,allies:s.allies,enemies:s.enemies,bans:s.bans,draftMode:s.draftMode,side:s.side,opponentId:s.opponentId,selectedRole:s.selectedRole,fearless:s.fearless||null});
  lastBoard=null;page='draft';analysisText='';
  if(pendingRemote){const snap=pendingRemote;pendingRemote=null;lastSharedJson='';applyRemoteTeam(snap);}
  save();render();toast('Practice ended. Your draft is back.');
@@ -896,7 +913,7 @@ function pickFile(kind){const input=document.createElement('input');input.type='
 
 /* ---------- Gemeinsame Datenbank ---------- */
 let db=null,teamRef=null,lastSharedJson='',pushing=false,teamReadOnly=false;
-const SHARED=['teamName','players','allies','enemies','bans','templates','draftMode','side','opponents','opponentId','history','matchups','draftActive'];
+const SHARED=['teamName','players','allies','enemies','bans','templates','draftMode','side','opponents','opponentId','history','matchups','draftActive','fearless'];
 const sharedPart=()=>Object.fromEntries(SHARED.map(k=>[k,state[k]]));
 const champIds=()=>new Set(catalog.champions.map(c=>c.id));
 async function pushBackup(){
@@ -944,9 +961,9 @@ async function connect(){
 // Einer bedient den Draft (Host), das Team schaut per Raum-Code live zu. Gespeichert wird nur der Draft-Stand
 // bei Supabase in Frankfurt, ohne Login. Die Bibliothek lädt erst, wenn jemand einen Raum benutzt.
 const SB_URL='https://vupytxgbazwgyhslzaxo.supabase.co',SB_KEY='sb_publishable_gHcNFcK3HK-HgrvshRIKBQ_lxOq3e5a';
-const ROOM_KEYS=['teamName','players','allies','enemies','bans','draftMode','side','draftActive','opponents','opponentId','matchups'];
+const ROOM_KEYS=['teamName','players','allies','enemies','bans','draftMode','side','draftActive','opponents','opponentId','matchups','fearless'];
 let room=null,sbClient=null,roomChannel=null,roomPushTimer=null,roomPoll=null,roomPushing=false,roomDirty=false;
-const viewerLocked=()=>room?.role==='viewer'&&page!=='plan'&&page!=='meta'&&page!=='mini';
+const viewerLocked=()=>room?.role==='viewer'&&!['plan','meta','mini','draft'].includes(page);
 function loadSb(){
  if(sbClient)return Promise.resolve(sbClient);
  return new Promise((ok,fail)=>{const el=document.createElement('script');el.src='vendor/supabase.js';el.onload=()=>{try{sbClient=window.supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});ok(sbClient);}catch(e){fail(e);}};el.onerror=()=>fail(Error('load'));document.head.appendChild(el);});
@@ -997,6 +1014,7 @@ function applyRoom(row){
   for(const k of ROOM_KEYS)state[k]=merged[k];
  }catch{return;}
  room.version=row.version;
+ if(state.bans.every(x=>!x))myVotes.clear();
  if(document.activeElement?.closest?.('.page-body')&&['INPUT','TEXTAREA'].includes(document.activeElement.tagName))return;
  render();
  for(const type of ['allies','enemies'])for(let i=0;i<5;i++)if(state[type][i]&&state[type][i]!==before[type][i]){lockSplash(state[type][i],type==='allies'?'us':'them',i);return;}
@@ -1012,10 +1030,13 @@ async function refreshRoom(){
 function subscribeRoom(){
  if(!sbClient||!room)return;
  if(roomChannel)sbClient.removeChannel(roomChannel);
- const me=Math.random().toString(36).slice(2,10),code=room.code;
+ const me=myId,code=room.code;
  roomChannel=sbClient.channel('room:'+code,{config:{presence:{key:me}}})
   .on('broadcast',{event:'changed'},()=>refreshRoom())
-  .on('presence',{event:'sync'},()=>{if(!room||!roomChannel)return;room.viewers=Object.values(roomChannel.presenceState()).filter(v=>v[0]?.role==='viewer').length;updateRoomBar();})
+  .on('broadcast',{event:'vote'},({payload:p})=>{if(room?.role!=='host'||!p||!champIds().has(p.id))return;const set=rawVotes.get(p.id)||new Set();if(p.on)set.add(String(p.from));else set.delete(String(p.from));rawVotes.set(p.id,set);hostTally();})
+  .on('broadcast',{event:'wish'},({payload:p})=>{if(room?.role!=='host'||!p||!champIds().has(p.id)||!(p.role>=0&&p.role<5))return;rawWishes.set(Number(p.role),{id:p.id,from:String(p.from)});hostTally();})
+  .on('broadcast',{event:'tally'},({payload:p})=>{if(room?.role!=='viewer'||!p)return;const ids=champIds();tally={votes:Object.fromEntries(Object.entries(p.votes||{}).filter(([id,n])=>ids.has(id)&&n>0).map(([id,n])=>[id,Number(n)])),wishes:Object.fromEntries(Object.entries(p.wishes||{}).filter(([r,id])=>r>=0&&r<5&&ids.has(id)))};updateWishUI();})
+  .on('presence',{event:'sync'},()=>{if(!room||!roomChannel)return;room.viewers=Object.values(roomChannel.presenceState()).filter(v=>v[0]?.role==='viewer').length;updateRoomBar();if(room.role==='host')hostTally();})
   .subscribe(status=>{
    if(!room||room.code!==code)return;
    if(status==='SUBSCRIBED'){room.status='live';roomChannel.track({role:room.role});if(room.role==='viewer')refreshRoom();else pushRoom();}
@@ -1032,7 +1053,7 @@ async function pushRoom(){
  if(roomPushing){roomDirty=true;return;}
  roomPushing=true;
  try{const {data,error}=await sbClient.rpc('update_room',{p_code:room.code,p_token:room.token,p_state:roomState()});if(error)throw error;
-  room.version=data;if(room.status!=='live'&&roomChannel?.state==='joined'){room.status='live';updateRoomBar();}}
+  room.version=data;if(room.status!=='live'&&roomChannel?.state==='joined'){room.status='live';updateRoomBar();}hostTally();}
  catch(e){if(/not allowed/.test(e?.message||'')){toast('The room has expired. Create a new one if you need it.',true);leaveRoom();}else if(room){room.status='offline';updateRoomBar();}}
  finally{roomPushing=false;if(roomDirty){roomDirty=false;pushRoom();}}
 }
@@ -1060,6 +1081,63 @@ function roomBarHtml(){
  return`<div id="room-bar" class="room-bar ${live?'live':'off'}"><span class="rb-dot" aria-hidden="true"></span><span class="rb-text"><strong>Live room ${room.code}</strong><span>${who}${state_}</span></span><span class="rb-actions">${host?`<button class="btn small" data-action="room-copy">${icon('copy')}Copy link</button>`:done&&page!=='plan'?`<button class="btn small primary" data-page="plan">${icon('map')}Game plan</button>`:''}<button class="btn ghost small" data-action="room-leave">Leave</button></span></div>`;
 }
 function updateRoomBar(){const el=document.getElementById('room-bar');if(el)el.outerHTML=roomBarHtml();}
+// Mitmachen als Zuschauer: Bans vorschlagen (👍) und sich einen Champion für eine Rolle wünschen.
+// Läuft nur live zwischen den Geräten, nichts davon wird gespeichert. Bestätigen kann nur der Host.
+const myId=(()=>{try{let v=sessionStorage.getItem('riftroom.me');if(!v){v=Math.random().toString(36).slice(2,10);sessionStorage.setItem('riftroom.me',v);}return v;}catch{return Math.random().toString(36).slice(2,10);}})();
+let tally={votes:{},wishes:{}},myVotes=new Set(),rawVotes=new Map(),rawWishes=new Map();
+function resetTeamWishes(){rawVotes.clear();rawWishes.clear();myVotes.clear();tally={votes:{},wishes:{}};}
+function hostTally(){
+ if(room?.role!=='host')return;
+ const tk=taken(),votes={},wishes={};
+ for(const [id,set] of rawVotes)if(set.size&&!tk.has(id))votes[id]=set.size;
+ for(const [r,w] of rawWishes)if(!state.allies[r]&&!tk.has(w.id))wishes[r]=w.id;
+ tally={votes,wishes};
+ roomChannel?.send({type:'broadcast',event:'tally',payload:tally});
+ updateWishUI();
+}
+function teamWishHtml(c){
+ if(!room||!c||c.who!=='us')return'';
+ const tk=taken(),ban=c.type==='ban';
+ const items=ban?Object.entries(tally.votes).filter(([id])=>!tk.has(id)).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([id,n])=>({id,tag:`${n} 👍${myVotes.has(id)?' · you':''}`}))
+  :Object.entries(tally.wishes).filter(([r,id])=>!state.allies[r]&&!tk.has(id)).map(([r,id])=>({id,role:Number(r),tag:`Wish for ${ROLE_NAMES[ROLES[r]]}`}));
+ if(!items.length)return'';
+ return`<div class="cs-sug team-wish"><span class="label">${ban?'Ban suggestions from the team':'Wishes from the team'}</span><div class="cs-sug-row">${items.map(x=>`<button class="cs-sug-item ${hoverId===x.id?'on':''}" data-hover="${x.id}" ${x.role!=null?`data-wish-role="${x.role}"`:''}>${portrait(x.id,'av sm')}<span><b>${esc(cname(x.id))}</b><small>${x.tag}</small></span></button>`).join('')}</div></div>`;
+}
+function wishChip(i){const id=room&&!state.allies[i]?tally.wishes[i]:null;return id&&!taken().has(id)?`<span class="wish-chip">Wish: ${esc(cname(id))}</span>`:'';}
+function updateWishUI(){
+ const el=document.getElementById('team-wish');if(el)el.innerHTML=teamWishHtml(draftTurn(state).current);
+ for(let i=0;i<5;i++){const row=document.querySelector(`[data-slot="allies|${i}"] .cs-row-text`);if(!row)continue;row.querySelector('.wish-chip')?.remove();const h=wishChip(i);if(h)row.insertAdjacentHTML('beforeend',h);}
+}
+function viewerLockBar(c){
+ const ban=c.type==='ban';
+ if(!hoverId)return`<span class="fine">${ban?'Tap a champion your team should ban.':'Tap the champion you want to play.'}</span><span class="lock-actions"><button class="btn primary" disabled>${ban?'Suggest ban':'Send wish'}</button></span>`;
+ const pr=ban?null:(pickRole??stepTarget(c).index);
+ const roleSel=ban?'':`<div class="pick-roles"><span class="fine">For which role?</span><div class="seg" role="group" aria-label="Role for your wish">${openSlots('allies').map(i=>`<button data-pick-role="${i}" aria-pressed="${pr===i}">${ROLE_NAMES[ROLES[i]]}</button>`).join('')}</div></div>`;
+ const label=ban?(myVotes.has(hoverId)?'Withdraw suggestion':'👍 Suggest ban'):`Send wish: ${ROLE_NAMES[ROLES[pr]]}`;
+ return`<div class="cs-lock-champ">${portrait(hoverId,'av')}<div><strong>${esc(cname(hoverId))}</strong><span class="fine">${ban?'Your team sees your suggestion instantly.':'The host sees your wish at your slot.'}</span></div></div>${roleSel}<button class="btn primary lock-btn" data-action="lock-in">${label}</button>`;
+}
+function viewerSend(){
+ const c=draftTurn(state).current;if(!c||c.who!=='us'||!hoverId)return;
+ if(!roomChannel||room.status!=='live'){toast('No connection to the room. Try again in a moment.',true);return;}
+ if(c.type==='ban'){
+  const on=!myVotes.has(hoverId);if(on)myVotes.add(hoverId);else myVotes.delete(hoverId);
+  roomChannel.send({type:'broadcast',event:'vote',payload:{from:myId,id:hoverId,on}});
+  toast(on?`${cname(hoverId)} suggested as a ban.`:'Suggestion withdrawn.');
+ }else{
+  const r=pickRole??stepTarget(c).index;
+  roomChannel.send({type:'broadcast',event:'wish',payload:{from:myId,id:hoverId,role:r}});
+  toast(`Wish sent: ${cname(hoverId)} for ${ROLE_NAMES[ROLES[r]]}.`);
+ }
+ hoverId=null;pickRole=null;render();
+}
+// Zuschauer im Live-Raum: im Draft nur Champions ansehen, filtern und vorschlagen, sonst nichts ändern.
+document.addEventListener('click',e=>{
+ if(room?.role!=='viewer'||page!=='draft')return;
+ const el=e.target.closest('button');if(!el||!el.closest('.page-body'))return;
+ const d=el.dataset;
+ if(d.hover||d.ra!=null||d.pickRole!=null||d.csRole||d.csPool!=null||d.page||d.action==='lock-in')return;
+ e.preventDefault();e.stopImmediatePropagation();
+},true);
 
 /* ---------- Ereignisse ---------- */
 document.addEventListener('click',e=>{
@@ -1094,9 +1172,11 @@ document.addEventListener('click',e=>{
  if(el.dataset.prTimer){prTimer=el.dataset.prTimer==='on';document.querySelectorAll('[data-pr-timer]').forEach(b=>b.setAttribute('aria-pressed',String(b===el)));return;}
  if(el.dataset.ra!=null){const i=Number(el.dataset.ra);state.selectedRole=i;pickRole=i;if(!csSearch)csRole=ROLES[i];save();render();return;}
  if(el.dataset.pickRole!=null){pickRole=Number(el.dataset.pickRole);if(!csSearch)csRole=ROLES[pickRole];render();return;}
- if(el.dataset.hover){selectHover(el.dataset.hover);return;}
+ if(el.dataset.hover){selectHover(el.dataset.hover,el.dataset.wishRole!=null?Number(el.dataset.wishRole):null);return;}
  if(el.dataset.csTarget){const [type,i]=el.dataset.csTarget.split('|');if(type==='allies')state.selectedRole=Number(i);else enemyRole=Number(i);render();return;}
  if(el.dataset.csRole){csRole=el.dataset.csRole;document.querySelectorAll('[data-cs-role]').forEach(b=>b.setAttribute('aria-pressed',String(b===el)));const g=$('#cs-grid');if(g)g.innerHTML=csGrid();return;}
+ if(el.dataset.flNext){fearlessNext(el.dataset.flNext);return;}
+ if(el.dataset.prFearless){prFearless=el.dataset.prFearless==='on';document.querySelectorAll('[data-pr-fearless]').forEach(b=>b.setAttribute('aria-pressed',String(b===el)));const h=$('#pr-fl-hint');if(h)h.textContent=prFearless?FL_HINT:'A normal draft.';return;}
  if(el.dataset.prMode){prMode=el.dataset.prMode;document.querySelectorAll('[data-pr-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b===el)));const h=$('#pr-mode-hint');const tr=$('#pr-timer-row');if(tr)tr.hidden=prMode!=='ai';if(h)h.textContent=prMode==='ai'?'Practice against the computer. Only in this browser.':'You enter the opponent picks. The team sees the draft live.';return;}
  if(el.dataset.muEdit){showMatchupDialog(el.dataset.muEdit);return;}
  if(el.dataset.muSave){const id=el.dataset.muSave,t=($('#mu-text')?.value||'').trim().slice(0,500);if(t)state.matchups[id]=t;else delete state.matchups[id];save();$('#confirm-dialog').close();render();toast(t?`Note on ${cname(id)} saved.`:`Note on ${cname(id)} removed.`);return;}
@@ -1107,11 +1187,11 @@ document.addEventListener('click',e=>{
  const action=el.dataset.action;if(!action)return;
  if(action==='log-game')showLogGame();
  if(action==='draft-open')openDraftDialog();
- if(action==='draft-start'){const opp=$('#pr-opp')?.value||'';$('#confirm-dialog').close();saveDraftOpts();if(prMode==='ai')startPractice({side:prSide,opponentId:opp,timer:prTimer});else startRealDraft(prSide,opp);}
+ if(action==='draft-start'){const opp=$('#pr-opp')?.value||'';$('#confirm-dialog').close();saveDraftOpts();if(prMode==='ai')startPractice({side:prSide,opponentId:opp,timer:prTimer,fearless:prFearless?{game:1,used:[]}:null});else startRealDraft(prSide,opp);}
  if(action==='lock-in')lockIn();
  if(action==='undo'){const u=undoStack.pop();if(u){state[u.type][u.index]=null;if(u.type==='allies')state.selectedRole=u.index;csKey=null;save();render();}}
  if(action==='draft-end'){if(practice)endPractice();else if(draftTurn(state).finished)endDraft();else confirmDialog('Cancel draft?','All picks and bans of this draft will be cleared.',()=>{endDraft();toast('Draft cancelled.');});}
- if(action==='practice-again'&&practice)startPractice({timer:practice.timer,side:state.side,opponentId:state.opponentId});
+ if(action==='practice-again'&&practice)startPractice({timer:practice.timer,side:state.side,opponentId:state.opponentId,fearless:state.fearless?{game:1,used:[]}:null});
  if(action==='practice-end')endPractice();
  if(action==='copy-discord')copyText(discordText(),'For Discord');
  if(action==='plan-regen')generatePlan(draftKey(),true);

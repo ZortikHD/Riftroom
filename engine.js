@@ -207,7 +207,7 @@ export function composition(ids){const p=ids.filter(Boolean).map(id=>profileOf(i
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 export function recommend(state,catalog,now=Date.now()){
  const index=state.selectedRole,role=ROLES[index],player=state.players[index];
- const occupied=new Set([...state.allies,...state.enemies,...state.bans].filter(Boolean));
+ const occupied=new Set([...state.allies,...state.enemies,...state.bans,...(state.fearless?.used||[])].filter(Boolean));
  const peers=state.allies.filter((_,i)=>i!==index);const team=composition(peers),enemy=composition(state.enemies);
  const patch=state.targetPatch||catalog.version;const live=metaStatus(state.meta,patch,now).ok;
  return catalog.champions.filter(c=>!occupied.has(c.id)&&profileOf(c.id)?.roles.includes(role)&&(!state.poolOnly||player.pool.some(p=>p.id===c.id))).map(c=>{
@@ -235,7 +235,8 @@ export function validateState(s,catalog){
  base.selectedRole=Number.isInteger(s.selectedRole)&&s.selectedRole>=0&&s.selectedRole<5?s.selectedRole:0;base.poolOnly=!!s.poolOnly;
  if(s.targetPatch&&!/^\d{1,2}\.\d{1,2}(\.\d+)?$/.test(s.targetPatch))throw Error('Ungültiger Ziel-Patch.');base.targetPatch=s.targetPatch||'';
  if(s.feedUrl){const u=new URL(s.feedUrl);if(u.protocol!=='https:'||u.username||u.password||u.search||u.hash)throw Error('Die Daten-URL muss HTTPS verwenden und darf keine Zugangsdaten oder Query-Parameter enthalten.');base.feedUrl=u.href;}
- if(s.meta)base.meta=validateMeta(s.meta,ids);base.metaImported=!!(s.metaImported&&base.meta);base.lastChecked=typeof s.lastChecked==='string'&&Number.isFinite(Date.parse(s.lastChecked))?s.lastChecked:null;
+ if(s.meta)base.meta=validateMeta(s.meta,ids);base.metaImported=!!(s.metaImported&&base.meta);
+ base.fearless=s.fearless&&Number.isInteger(s.fearless.game)&&s.fearless.game>=1&&s.fearless.game<=9&&Array.isArray(s.fearless.used)?{game:s.fearless.game,used:[...new Set(s.fearless.used.filter(id=>ids.has(id)))].slice(0,60)}:null;base.lastChecked=typeof s.lastChecked==='string'&&Number.isFinite(Date.parse(s.lastChecked))?s.lastChecked:null;
  base.seenPatch=typeof s.seenPatch==='string'&&/^\d{1,2}\.\d{1,2}$/.test(s.seenPatch)?s.seenPatch:'';
  base.templates=(Array.isArray(s.templates)?s.templates:[]).slice(0,20).flatMap(t=>{try{if(!t||typeof t.name!=='string')return[];const pick=(a,n)=>{if(!Array.isArray(a)||a.length!==n)throw Error();return a.map(id=>{if(id===null)return null;if(id==='none'&&n===10)return 'none';if(!ids.has(id))throw Error();return id;});};return[{id:String(t.id||t.name).slice(0,30),name:t.name.slice(0,40),allies:pick(t.allies,5),enemies:pick(t.enemies,5),bans:pick(t.bans,10)}];}catch{return[];}});
  base.draftMode=s.draftMode==='tournament'?'tournament':'free';base.draftActive=!!s.draftActive;base.side=s.side==='red'?'red':'blue';

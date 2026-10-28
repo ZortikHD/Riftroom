@@ -60,7 +60,7 @@ function finish(){
 }
 function standings(g){
  const rows=new Map();
- rows.set('me',{nick:me.nick||'Du',score:me.score,me:true});
+ rows.set('me',{nick:me.nick||'You',score:me.score,me:true});
  for(const p of peers){if(p.sameTab)continue;const pr=p.presence||{};if(pr.game?.id===g?.id)rows.set(p.peer,{nick:String(pr.nick||'Player').slice(0,24),score:Number(pr.score)||0,me:false});}
  return[...rows.values()].sort((a,b)=>b.score-a.score);
 }
@@ -140,7 +140,7 @@ function paintBoard(){
  const live=document.getElementById('mg-live');if(live)live.innerHTML=room?'<i></i>live':'';
  const others=peers.filter(p=>!p.sameTab&&p.presence?.nick);
  const inGame=me.game&&me.state!=='lobby';
- const rows=[{nick:me.nick||'Du',score:me.score,state:me.state,me:true,same:true},...others.map(p=>({nick:String(p.presence.nick).slice(0,24),score:Number(p.presence.score)||0,state:p.presence.state,same:inGame&&p.presence.game?.id===me.game.id}))];
+ const rows=[{nick:me.nick||'You',score:me.score,state:me.state,me:true,same:true},...others.map(p=>({nick:String(p.presence.nick).slice(0,24),score:Number(p.presence.score)||0,state:p.presence.state,same:inGame&&p.presence.game?.id===me.game.id}))];
  let html='';
  if(inGame){
   const list=rows.filter(r=>r.same).sort((a,b)=>b.score-a.score),max=Math.max(5,...list.map(r=>r.score));
@@ -170,7 +170,7 @@ function paintRound(changed){
  timer.textContent=now<g.start?'':`${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`;timer.classList.toggle('low',left<10000&&now>=g.start);
  if(bar){bar.style.width=`${now<g.start?100:left/g.dur*100}%`;bar.classList.toggle('low',left<10000);}
  if(now<g.start){const n=Math.ceil((g.start-now)/1000);if(lastCount!==n){lastCount=n;word.innerHTML=`<span class="mg-count">${n}</span>`;hint.textContent=g.host?`Game by ${g.host}`:'Starting soon';if(ghost)ghost.removeAttribute('src');}return;}
- if(lastCount!==null&&lastCount!==0){lastCount=0;const st=document.getElementById('mg-stage');const go=document.createElement('span');go.className='mg-gotext';go.textContent='LOS!';st?.appendChild(go);setTimeout(()=>go.remove(),900);changed=true;}
+ if(lastCount!==null&&lastCount!==0){lastCount=0;const st=document.getElementById('mg-stage');const go=document.createElement('span');go.className='mg-gotext';go.textContent='GO!';st?.appendChild(go);setTimeout(()=>go.remove(),900);changed=true;}
  if(busy)return;
  const n=revealed(c.name,now),len=letterCount(c.name);
  if(changed||word.dataset.id!==c.id){word.innerHTML=tiles(c.name,n,'');word.dataset.id=c.id;word.dataset.n=n;word.classList.remove('wrong');if(ghost)ghost.src=`img/sq/${c.id}.webp`;}

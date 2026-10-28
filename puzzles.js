@@ -39,8 +39,8 @@ const name=id=>ctx.esc(ctx.cname(id));
 const icon=id=>`<img src="${ctx.SQUARE[id]}" alt="">`;
 const spinner='<section class="card pz-loading"><div class="spinner"></div></section>';
 // Startbildschirm wie bei „Champion raten“: Titel, Regeln, Stand und ein großer Start-Knopf.
-function hero({art,badge,t1,t2,rules,demo='',extra='',stats='',btn,act}){
- return`<section class="mg-hero pz-hero"><img class="pz-hero-art" src="${ctx.LOADING[art]||''}" alt=""><div class="mg-hero-in"><span class="mg-badge">${badge}</span><h1 class="mg-title"><span>${t1}</span><span>${t2}</span></h1>${demo?`<div class="pz-demo" aria-hidden="true">${demo}</div>`:''}<p class="mg-rules">${rules}</p>${stats?`<div class="pz-hero-stats">${stats}</div>`:''}${extra}<button class="mg-go" ${act}><span>${btn}</span></button></div></section>`;
+function hero({art,badge,t1,t2,rules,demo='',extra='',stats='',btn,act,friends=''}){
+ return`<section class="mg-hero pz-hero"><img class="pz-hero-art" src="${ctx.LOADING[art]||''}" alt=""><div class="mg-hero-in"><span class="mg-badge">${badge}</span><h1 class="mg-title"><span>${t1}</span><span>${t2}</span></h1>${demo?`<div class="pz-demo" aria-hidden="true">${demo}</div>`:''}<p class="mg-rules">${rules}</p>${stats?`<div class="pz-hero-stats">${stats}</div>`:''}${extra}<button class="mg-go" ${act}><span>${btn}</span></button>${friends&&ctx.friendsBtn?ctx.friendsBtn(friends):''}</div></section>`;
 }
 const stat=(v,l)=>`<span><b>${v}</b>${l}</span>`;
 // Ergebnis einer Runde: große Zahl, Kästchen pro Aufgabe, Nochmal-Knopf.
@@ -107,7 +107,7 @@ const dotsOf=(list,i,n)=>Array.from({length:n},(_,k)=>`<i class="${list[k]||''} 
 function counterHtml(){
  if(!mu){fetchData('matchups');return loading.matchups==='error'?dataError('matchups'):spinner;}
  const roleSeg=`<div class="seg pz-roles" role="group" aria-label="Rolle">${['ALL',...ROLE_KEYS].map(r=>`<button data-pz-role="${r}" aria-pressed="${pz.role===r}">${r==='ALL'?'Alle':ROLE_LABEL[r]}</button>`).join('')}</div>`;
- if(!cr)return hero({art:'Yasuo',badge:'Minispiel',t1:'Counter',t2:'Puzzle',rules:`Du siehst einen Gegner und wählst aus vier Champions den besten Konter. ${CP_N} Puzzles pro Runde. Deine Wertung steigt und fällt wie bei Chess.com.`,demo:['?','?','★','?'].map((x,i)=>`<span class="pz-demo-card ${x==='★'?'hit':''}" style="--i:${i}">${x}</span>`).join(''),stats:stat(pz.rating,'Wertung')+stat(pz.best,'beste Serie')+stat(pz.games,'gespielt'),extra:`<div class="pz-hero-roles"><span class="fine">Rolle</span>${roleSeg}</div>`,btn:'Runde starten',act:'data-pz="start"'});
+ if(!cr)return hero({art:'Yasuo',badge:'Minispiel',t1:'Counter',t2:'Puzzle',rules:`Du siehst einen Gegner und wählst aus vier Champions den besten Konter. ${CP_N} Puzzles pro Runde. Deine Wertung steigt und fällt wie bei Chess.com.`,demo:['?','?','★','?'].map((x,i)=>`<span class="pz-demo-card ${x==='★'?'hit':''}" style="--i:${i}">${x}</span>`).join(''),stats:stat(pz.rating,'Wertung')+stat(pz.best,'beste Serie')+stat(pz.games,'gespielt'),extra:`<div class="pz-hero-roles"><span class="fine">Rolle</span>${roleSeg}</div>`,btn:'Runde starten',act:'data-pz="start"',friends:'counter'});
  if(cr.done){const gain=pz.rating-cr.from;return roundEnd({badge:'Runde fertig',pre:gain>=0?'+':'−',big:Math.abs(gain),unit:'Wertung',sq:cr.grades.map(sqOf).join(''),text:`${cr.grades.filter(g=>g==='best').length} von ${CP_N} perfekt gelöst. Deine Wertung: ${pz.rating}.`,act:'data-pz="start"'});}
  if(!cp)newPuzzle();
  if(!cp)return'<section class="card empty"><h2>Kein Puzzle gefunden</h2><p>Für diese Rolle gibt es gerade zu wenige Daten. Wähle eine andere Rolle.</p></section>';
@@ -220,18 +220,22 @@ function answerDuel(side){
 function duelHtml(){
  if(!mu){fetchData('matchups');return loading.matchups==='error'?dataError('matchups'):spinner;}
  if(!ctx.meta())return'<section class="card empty"><h2>Noch keine Winrates</h2><p>Für dieses Spiel braucht Riftroom die aktuellen Winrates. Sie laden automatisch, sobald eine Verbindung besteht.</p></section>';
- if(!wr)return hero({art:'Jinx',badge:'Minispiel',t1:'Wer',t2:'gewinnt?',rules:`Zwei Drafts treten gegeneinander an. Tippe, welches Team laut den Lane-Duellen vorne liegt. ${WW_N} Duelle pro Runde.`,demo:'<span class="pz-demo-vs b">Blau</span><span class="pz-demo-x">VS</span><span class="pz-demo-vs r">Rot</span>',stats:stat(wws.best,'beste Serie')+stat(`${wws.right}/${wws.played}`,'richtig'),btn:'Runde starten',act:'data-ww="start"'});
+ if(!wr)return hero({art:'Jinx',badge:'Minispiel',t1:'Wer',t2:'gewinnt?',rules:`Zwei Drafts treten gegeneinander an. Tippe, welches Team laut den Lane-Duellen vorne liegt. ${WW_N} Duelle pro Runde.`,demo:'<span class="pz-demo-vs b">Blau</span><span class="pz-demo-x">VS</span><span class="pz-demo-vs r">Rot</span>',stats:stat(wws.best,'beste Serie')+stat(`${wws.right}/${wws.played}`,'richtig'),btn:'Runde starten',act:'data-ww="start"',friends:'whowins'});
  if(wr.done){const n=wr.res.filter(x=>x==='best').length;return roundEnd({badge:'Runde fertig',big:n,unit:`/${WW_N}`,sq:wr.res.map(sqOf).join(''),text:n>=8?'Du liest Drafts wie ein Analyst.':n>=5?'Solide. Achte auf die größten Lane-Vorteile.':'Schau dir die Lane-Balken an, dann klappt es besser.',act:'data-ww="start"'});}
  if(!ww)ww=makeDuel();
  if(!ww)return'<section class="card empty"><h2>Kein Duell gefunden</h2><p>Gerade fehlen Daten. Versuch es später noch einmal.</p></section>';
+ return`<section class="card ww-card"><div class="pz-head"><div class="pz-rating"><span class="fine">Serie</span><b>${wws.streak}</b></div><span class="dl-dots pz-dots">${dotsOf(wr.res,wr.i,WW_N)}</span></div>${duelView(ww,'data-ww-pick',`<button class="btn primary" data-ww="next">${wr.i+1<WW_N?'Nächstes Duell':'Ergebnis'}</button>`)}</section>`;
+}
+// Die Duell-Karte, genutzt allein und in der Lobby.
+function duelView(ww,pickAttr,next){
  const done=!!ww.answer,favBlue=ww.total>0;
  const team=(ids,side)=>`<div class="ww-team ${side} ${done&&(side==='blue')===favBlue?'fav':''}">${ids.map((id,k)=>`<div class="ww-row" style="--i:${k}"><img class="ww-art" src="${ctx.LOADING[id]||ctx.SQUARE[id]}" alt=""><span class="role-label">${ROLE_LABEL[ROLE_KEYS[k]]}</span><strong>${name(id)}</strong></div>`).join('')}</div>`;
  const max=Math.max(4,...ww.lanes.map(l=>Math.abs(l.edge)));
  const lanes=done?`<div class="ww-lanes">${ww.lanes.map((l,k)=>{const w=Math.abs(l.edge)/max*50;return`<div class="ww-lane" style="--i:${k}"><span class="ww-l">${icon(l.b)}</span><span class="ww-track"><i class="${l.edge>=0?'b':'r'}" style="${l.edge>=0?`right:50%`:`left:50%`};width:${w}%"></i><em>${ROLE_LABEL[l.role]} · ${l.edge>=0?'+':''}${l.edge.toFixed(1).replace('.',de()?',':'.')}</em></span><span class="ww-l">${icon(l.r)}</span></div>`;}).join('')}</div>`:'';
  const winBar=done?`<div class="ww-win"><span class="b" style="width:${ww.win}%">${Math.round(ww.win)} %</span><span class="r">${Math.round(100-ww.win)} %</span></div>`:'';
- const verdict=done?`<div class="pz-verdict ${ww.right?'best':'bad'}"><strong>${ww.right?'Richtig!':'Daneben'}</strong><p>${favBlue?'Blau':'Rot'} liegt vorne: ${ww.lanes.filter(l=>(l.edge>0)===favBlue).length} von 5 Lane-Duellen gehen an ${favBlue?'Blau':'Rot'}. Geschätzte Siegchance ${Math.round(Math.max(ww.win,100-ww.win))} %.</p><button class="btn primary" data-ww="next">${wr.i+1<WW_N?'Nächstes Duell':'Ergebnis'}</button></div>`:'';
- const ask=done?'':`<div class="ww-ask"><p>Welches Team liegt laut Statistik vorne?</p><div class="row"><button class="btn ww-pick blue" data-ww-pick="blue">Blau</button><button class="btn ww-pick red" data-ww-pick="red">Rot</button></div></div>`;
- return`<section class="card ww-card"><div class="pz-head"><div class="pz-rating"><span class="fine">Serie</span><b>${wws.streak}</b></div><span class="dl-dots pz-dots">${dotsOf(wr.res,wr.i,WW_N)}</span></div><div class="ww-board">${team(ww.blue,'blue')}<div class="ww-vs">VS</div>${team(ww.red,'red')}</div>${ask}${lanes}${winBar}${verdict}<p class="fine pz-src">Grundlage: Winrates der fünf Lane-Duelle (${ctx.esc(mu.rank)}, Patch ${ctx.esc(mu.patch)}). Eine Schätzung, keine Garantie.</p></section>`;
+ const verdict=done?`<div class="pz-verdict ${ww.right?'best':'bad'}"><strong>${ww.right?'Richtig!':'Daneben'}</strong><p>${favBlue?'Blau':'Rot'} liegt vorne: ${ww.lanes.filter(l=>(l.edge>0)===favBlue).length} von 5 Lane-Duellen gehen an ${favBlue?'Blau':'Rot'}. Geschätzte Siegchance ${Math.round(Math.max(ww.win,100-ww.win))} %.</p>${next}</div>`:'';
+ const ask=done?'':`<div class="ww-ask"><p>Welches Team liegt laut Statistik vorne?</p><div class="row"><button class="btn ww-pick blue" ${pickAttr}="blue">Blau</button><button class="btn ww-pick red" ${pickAttr}="red">Rot</button></div></div>`;
+ return`<div class="ww-board">${team(ww.blue,'blue')}<div class="ww-vs">VS</div>${team(ww.red,'red')}</div>${ask}${lanes}${winBar}${verdict}<p class="fine pz-src">Grundlage: Winrates der fünf Lane-Duelle (${ctx.esc(mu.rank)}, Patch ${ctx.esc(mu.patch)}). Eine Schätzung, keine Garantie.</p>`;
 }
 
 /* ---------- Ban-Puzzle ---------- */
@@ -270,15 +274,18 @@ function answerBan(id){
 }
 function banHtml(){
  if(!ctx.meta())return'<section class="card empty"><h2>Noch keine Winrates</h2><p>Für dieses Spiel braucht Riftroom die aktuellen Winrates. Sie laden automatisch, sobald eine Verbindung besteht.</p></section>';
- if(!br)return hero({art:'Zed',badge:'Minispiel',t1:'Ban',t2:'Puzzle',rules:`Du siehst ein Gegnerteam mit seinen Champion-Pools. Welcher Ban nimmt ihnen am meisten weg? ${BP_N} Teams pro Runde, bester Ban 2 Punkte.`,demo:['','✕',''].map((x,i)=>`<span class="pz-demo-card ${x?'ban':''}" style="--i:${i}">${x||'?'}</span>`).join(''),stats:stat(bps.best,'beste Serie')+stat(bps.played,'gespielt'),btn:'Runde starten',act:'data-bp="start"'});
+ if(!br)return hero({art:'Zed',badge:'Minispiel',t1:'Ban',t2:'Puzzle',rules:`Du siehst ein Gegnerteam mit seinen Champion-Pools. Welcher Ban nimmt ihnen am meisten weg? ${BP_N} Teams pro Runde, bester Ban 2 Punkte.`,demo:['','✕',''].map((x,i)=>`<span class="pz-demo-card ${x?'ban':''}" style="--i:${i}">${x||'?'}</span>`).join(''),stats:stat(bps.best,'beste Serie')+stat(bps.played,'gespielt'),btn:'Runde starten',act:'data-bp="start"',friends:'ban'});
  if(br.done){const n=br.res.reduce((s,x)=>s+(x==='best'?2:x==='good'?1:0),0);return roundEnd({badge:'Runde fertig',big:n,unit:`/${BP_N*2}`,sq:br.res.map(sqOf).join(''),text:n>=8?'Du findest die Schwachstellen sofort.':n>=5?'Solide. Achte auf Spieler mit wenig Ausweichmöglichkeiten.':'Tipp: Ein Spieler, der fast nur einen Champion spielt, ist das beste Ziel.',act:'data-bp="start"'});}
  if(!bp)bp=makeBan();
  if(!bp)return'<section class="card empty"><h2>Kein Puzzle gefunden</h2><p>Gerade fehlen Daten. Versuch es später noch einmal.</p></section>';
+ return`<section class="card bp-card"><div class="pz-head"><div class="pz-rating"><span class="fine">Serie</span><b>${bps.streak}</b></div><span class="dl-dots pz-dots">${dotsOf(br.res,br.i,BP_N)}</span></div>${banView(bp,'data-bp-pick',`<button class="btn primary" data-bp="next">${br.i+1<BP_N?'Nächstes Team':'Ergebnis'}</button>`)}</section>`;
+}
+function banView(bp,pickAttr,next){
  const done=!!bp.answer,maxI=Math.max(...bp.players.flatMap(p=>p.champs.map(c=>c.impact)),0.1);
- const cards=bp.players.map((p,i)=>`<div class="bp-player" style="--i:${i}"><div class="bp-ph"><span class="role-label">${ROLE_LABEL[p.role]}</span><span class="fine">${p.games} Spiele</span></div>${p.champs.map(c=>{const cls=!done?'':c.id===bp.bestId?'best':bp.rank.indexOf(c.id)<=2?'good':'';return`<button class="bp-champ ${cls} ${bp.answer===c.id?'mine':''}" data-bp-pick="${c.id}" ${done?'disabled':''}>${icon(c.id)}<span class="bp-info"><b>${name(c.id)}</b><small>${Math.round(c.share*100)} % der Spiele · ${Math.round(c.wr)} % Siege</small>${done?`<span class="bp-bar"><i style="width:${Math.max(3,c.impact/maxI*100)}%"></i></span>`:''}</span>${!done?'<span class="bp-x" aria-hidden="true">✕</span>':''}</button>`;}).join('')}</div>`).join('');
+ const cards=bp.players.map((p,i)=>`<div class="bp-player" style="--i:${i}"><div class="bp-ph"><span class="role-label">${ROLE_LABEL[p.role]}</span><span class="fine">${p.games} Spiele</span></div>${p.champs.map(c=>{const cls=!done?'':c.id===bp.bestId?'best':bp.rank.indexOf(c.id)<=2?'good':'';return`<button class="bp-champ ${cls} ${bp.answer===c.id?'mine':''}" ${pickAttr}="${c.id}" ${done?'disabled':''}>${icon(c.id)}<span class="bp-info"><b>${name(c.id)}</b><small>${Math.round(c.share*100)} % der Spiele · ${Math.round(c.wr)} % Siege</small>${done?`<span class="bp-bar"><i style="width:${Math.max(3,c.impact/maxI*100)}%"></i></span>`:''}</span>${!done?'<span class="bp-x" aria-hidden="true">✕</span>':''}</button>`;}).join('')}</div>`).join('');
  const b=bp.players.flatMap(p=>p.champs.map(c=>({...c,role:p.role}))).find(c=>c.id===bp.bestId);
- const verdict=done?`<div class="pz-verdict ${bp.pts===2?'best':bp.pts?'good':'bad'}"><strong>${bp.pts===2?'Perfekter Ban!':bp.pts?'Guter Ban':'Wenig Wirkung'}</strong><p>Am meisten tut ${name(b.id)} weh: Der ${ROLE_LABEL[b.role]}-Spieler nimmt ihn in ${Math.round(b.share*100)} % seiner Spiele und gewinnt ${Math.round(b.wr)} %. Ohne ihn fällt er auf etwa ${Math.round(b.backup)} % zurück.</p><button class="btn primary" data-bp="next">${br.i+1<BP_N?'Nächstes Team':'Ergebnis'}</button></div>`:'<p class="bp-ask">Tippe den Champion an, den du bannen würdest.</p>';
- return`<section class="card bp-card"><div class="pz-head"><div class="pz-rating"><span class="fine">Serie</span><b>${bps.streak}</b></div><span class="dl-dots pz-dots">${dotsOf(br.res,br.i,BP_N)}</span></div><div class="bp-intro"><h2>Das Gegnerteam</h2><p class="fine">Ein Beispiel-Team mit seinen letzten Spielen. Welcher Ban nimmt ihnen am meisten weg?</p></div><div class="bp-grid">${cards}</div>${verdict}</section>`;
+ const verdict=done?`<div class="pz-verdict ${bp.pts===2?'best':bp.pts?'good':'bad'}"><strong>${bp.pts===2?'Perfekter Ban!':bp.pts?'Guter Ban':'Wenig Wirkung'}</strong><p>Am meisten tut ${name(b.id)} weh: Der ${ROLE_LABEL[b.role]}-Spieler nimmt ihn in ${Math.round(b.share*100)} % seiner Spiele und gewinnt ${Math.round(b.wr)} %. Ohne ihn fällt er auf etwa ${Math.round(b.backup)} % zurück.</p>${next}</div>`:'<p class="bp-ask">Tippe den Champion an, den du bannen würdest.</p>';
+ return`<div class="bp-intro"><h2>Das Gegnerteam</h2><p class="fine">Ein Beispiel-Team mit seinen letzten Spielen. Welcher Ban nimmt ihnen am meisten weg?</p></div><div class="bp-grid">${cards}</div>${verdict}`;
 }
 
 /* ---------- Macro-Quiz ---------- */
@@ -325,7 +332,7 @@ function offMap(s){
 }
 function macroHtml(){
  if(!scen){fetchData('scenarios');return loading.scenarios==='error'?dataError('scenarios'):spinner;}
- if(!mq)return hero({art:'Nautilus',badge:'Minispiel',t1:'Macro',t2:'Quiz',rules:`Du siehst eine Situation auf der Karte und hast drei Möglichkeiten. Die beste gibt 2 Punkte, eine okaye 1 Punkt. ${ROUND} Situationen pro Runde, ${scenList().length} insgesamt.`,demo:'<span class="pz-demo-dot b"></span><span class="pz-demo-dot b me"></span><span class="pz-demo-dot obj"></span><span class="pz-demo-dot r"></span>',stats:mqs.best?stat(mqs.best,'Rekord')+stat(mqs.rounds,'Runden'):'',btn:'Runde starten',act:'data-mq="again"'});
+ if(!mq)return hero({art:'Nautilus',badge:'Minispiel',t1:'Macro',t2:'Quiz',rules:`Du siehst eine Situation auf der Karte und hast drei Möglichkeiten. Die beste gibt 2 Punkte, eine okaye 1 Punkt. ${ROUND} Situationen pro Runde, ${scenList().length} insgesamt.`,demo:'<span class="pz-demo-dot b"></span><span class="pz-demo-dot b me"></span><span class="pz-demo-dot obj"></span><span class="pz-demo-dot r"></span>',stats:mqs.best?stat(mqs.best,'Rekord')+stat(mqs.rounds,'Runden'):'',btn:'Runde starten',act:'data-mq="again"',friends:'macro'});
  const all=scenList();
  if(mq.done){
   const max=ROUND*2;
@@ -333,12 +340,14 @@ function macroHtml(){
  }
  const s=all.find(x=>x.id===mq.ids[mq.i]);if(!s){mq=null;return macroHtml();}
  const dots=mq.ids.map((_,k)=>`<i class="${k<mq.i?'done':k===mq.i?'now':''}"></i>`).join('');
- const opts=s.opts.map((o,k)=>{const done=mq.answer!=null;const cls=!done?'':['bad','ok','best'][o.s];
-  return`<button class="mq-opt ${cls} ${mq.answer===k?'mine':''}" style="--i:${k}" data-mq-pick="${k}" ${done?'disabled':''}><span class="mq-letter">${'ABC'[k]}</span><span class="mq-t">${ctx.esc(o.t)}${done?`<small>${o.s===2?'Beste Wahl':o.s===1?'Okay':'Schlecht'}: ${ctx.esc(o.why)}</small>`:''}</span></button>`;}).join('');
  const res=mq.answer!=null?`<div class="mq-next"><span class="mq-pts">${s.opts[mq.answer].s===2?'+2 Punkte':s.opts[mq.answer].s===1?'+1 Punkt':'0 Punkte'}</span><button class="btn primary" data-mq="next">${mq.i+1<ROUND?'Weiter':'Ergebnis'}</button></div>`:'';
- return`<section class="card mq-card"><div class="mq-top"><span class="mq-dots" aria-label="Frage ${mq.i+1} von ${ROUND}">${dots}</span><span class="fine">Punkte: <b>${mq.points}</b></span></div>
-  <div class="mq-grid"><div class="mq-mapwrap">${mapSvg(s)}${offMap(s)}<p class="fine mq-legend"><span class="lg blue"></span>Euer Team <span class="lg red"></span>Gegner <span class="lg me"></span>Du</p></div>
-  <div class="mq-body"><div class="mq-meta"><span class="tag">Du: ${LETTER_ROLE[s.role]}</span><span class="tag mq-clock">${ctx.esc(s.time)}</span></div><h2>${ctx.esc(s.title)}</h2><p>${ctx.esc(s.text)}</p><p class="mq-q">Was ist der beste Play?</p><div class="mq-opts">${opts}</div>${res}</div></div></section>`;
+ return`<section class="card mq-card"><div class="mq-top"><span class="mq-dots" aria-label="Frage ${mq.i+1} von ${ROUND}">${dots}</span><span class="fine">Punkte: <b>${mq.points}</b></span></div>${macroView(s,mq.answer,'data-mq-pick',res)}</section>`;
+}
+function macroView(s,answer,pickAttr,res){
+ const opts=s.opts.map((o,k)=>{const done=answer!=null;const cls=!done?'':['bad','ok','best'][o.s];
+  return`<button class="mq-opt ${cls} ${answer===k?'mine':''}" style="--i:${k}" ${pickAttr}="${k}" ${done?'disabled':''}><span class="mq-letter">${'ABC'[k]}</span><span class="mq-t">${ctx.esc(o.t)}${done?`<small>${o.s===2?'Beste Wahl':o.s===1?'Okay':'Schlecht'}: ${ctx.esc(o.why)}</small>`:''}</span></button>`;}).join('');
+ return`<div class="mq-grid"><div class="mq-mapwrap">${mapSvg(s)}${offMap(s)}<p class="fine mq-legend"><span class="lg blue"></span>Euer Team <span class="lg red"></span>Gegner <span class="lg me"></span>Du</p></div>
+  <div class="mq-body"><div class="mq-meta"><span class="tag">Du: ${LETTER_ROLE[s.role]}</span><span class="tag mq-clock">${ctx.esc(s.time)}</span></div><h2>${ctx.esc(s.title)}</h2><p>${ctx.esc(s.text)}</p><p class="mq-q">Was ist der beste Play?</p><div class="mq-opts">${opts}</div>${res}</div></div>`;
 }
 function answerMacro(k){
  if(!mq||mq.answer!=null)return;
@@ -393,17 +402,67 @@ function answerTimer(val){
 }
 function nextTimer(){if(!tq)return;if(tq.i+1<TQ_N){tq.i++;tq.answer=null;tq.deadline=0;}else{tq.done=true;tqs.rounds++;const rec=tq.points>tqs.best;tqs.best=Math.max(tqs.best,tq.points);store(TQ_KEY,tqs);if(rec||tq.right>=4)fx='best';}}
 function timerHtml(){
- if(!tq)return hero({art:'Zilean',badge:'Minispiel',t1:'Timer',t2:'Quiz',rules:`Wann kommt der Drache wieder? Wann hat der Gegner wieder Flash? ${TQ_N} Fragen, je ${TQ_SECS} Sekunden. Je schneller, desto mehr Punkte.`,demo:'<div class="tq-clock big"><span>5:00</span></div>',stats:tqs.best?stat(tqs.best,'Rekord')+stat(tqs.rounds,'Runden'):'',btn:'Los geht\'s',act:'data-tq="start"'});
+ if(!tq)return hero({art:'Zilean',badge:'Minispiel',t1:'Timer',t2:'Quiz',rules:`Wann kommt der Drache wieder? Wann hat der Gegner wieder Flash? ${TQ_N} Fragen, je ${TQ_SECS} Sekunden. Je schneller, desto mehr Punkte.`,demo:'<div class="tq-clock big"><span>5:00</span></div>',stats:tqs.best?stat(tqs.best,'Rekord')+stat(tqs.rounds,'Runden'):'',btn:'Los geht\'s',act:'data-tq="start"',friends:'timer'});
  if(tq.done){
   return`<section class="card mq-end"><span class="mg-badge">Runde fertig</span><h2><b data-countup="0">${tq.points}</b> Punkte</h2><p class="fine">${tq.right} von ${TQ_N} richtig. Rekord: ${tqs.best} Punkte.</p><button class="mg-go small" data-tq="start"><span>Nochmal</span></button></section>`;
  }
  const q=tq.qs[tq.i],done=tq.answer!=null;
  const dots=tq.qs.map((x,k)=>`<i class="${k<tq.i?(x.ok?'best':'bad'):k===tq.i?'now':''}"></i>`).join('');
- const opts=q.opts.map((t,k)=>{const cls=!done?'':t===q.ans?'best':t===tq.answer?'bad':'';return`<button class="tq-opt ${cls}" style="--i:${k}" data-tq-pick="${t}" ${done?'disabled':''}>${mmss(t)}</button>`;}).join('');
- const res=done?`<div class="pz-verdict ${q.ok?'best':'bad'}"><strong>${q.ok?`+${q.gain}`:tq.answer===-1?'Zeit abgelaufen':'Daneben'}</strong><p>Richtig ist ${mmss(q.ans)}. ${ctx.esc(q.rule)}</p><button class="btn primary" data-tq="next">${tq.i+1<TQ_N?'Weiter':'Ergebnis'}</button></div>`:'';
  const left=done?0:Math.max(0,tq.deadline?(tq.deadline-Date.now())/1000:TQ_SECS);
- return`<section class="card tq-card"><div class="mq-top"><span class="mq-dots dl-dots">${dots}</span><span class="fine">Punkte: <b>${tq.points}</b></span></div><div class="tq-main"><div class="tq-ring" id="tq-ring" style="--p:${left/TQ_SECS}"><span id="tq-left">${Math.ceil(left)}</span></div><h2 class="tq-q">${ctx.esc(q.q)}</h2></div><div class="tq-opts">${opts}</div>${res}</section>`;
+ return`<section class="card tq-card"><div class="mq-top"><span class="mq-dots dl-dots">${dots}</span><span class="fine">Punkte: <b>${tq.points}</b></span></div>${timerView(q,tq.answer,q.gain,left,'data-tq-pick',`<button class="btn primary" data-tq="next">${tq.i+1<TQ_N?'Weiter':'Ergebnis'}</button>`,'tq')}</section>`;
 }
+function timerView(q,answer,gain,left,pickAttr,next,idp){
+ const done=answer!=null,ok=answer===q.ans;
+ const opts=q.opts.map((t,k)=>{const cls=!done?'':t===q.ans?'best':t===answer?'bad':'';return`<button class="tq-opt ${cls}" style="--i:${k}" ${pickAttr}="${t}" ${done?'disabled':''}>${mmss(t)}</button>`;}).join('');
+ const res=done?`<div class="pz-verdict ${ok?'best':'bad'}"><strong>${ok?`+${gain}`:answer===-1?'Zeit abgelaufen':'Daneben'}</strong><p>Richtig ist ${mmss(q.ans)}. ${ctx.esc(q.rule)}</p>${next}</div>`:'';
+ return`<div class="tq-main"><div class="tq-ring" id="${idp}-ring" style="--p:${left/TQ_SECS}"><span id="${idp}-left">${Math.ceil(left)}</span></div><h2 class="tq-q">${ctx.esc(q.q)}</h2></div><div class="tq-opts">${opts}</div>${res}`;
+}
+
+/* ---------- Mehrspieler (Lobby) ---------- */
+// Alle in einer Lobby erzeugen aus demselben Startwert dieselben Aufgaben, jeder bei sich und in seiner Sprache.
+// Die Prüfsumme zeigt, ob wirklich alle dieselben Aufgaben haben (sonst sind die Daten unterschiedlich alt).
+const noWr='<section class="card empty"><h2>Noch keine Winrates</h2><p>Für dieses Spiel braucht Riftroom die aktuellen Winrates. Sie laden automatisch, sobald eine Verbindung besteht.</p></section>';
+export function mpReady(game,c){
+ if(c)ctx=c;
+ if(game==='timer')return null;
+ if(game==='macro'){if(!scen){fetchData('scenarios');return loading.scenarios==='error'?dataError('scenarios'):spinner;}return null;}
+ if(!mu){fetchData('matchups');return loading.matchups==='error'?dataError('matchups'):spinner;}
+ if((game==='whowins'||game==='ban')&&!ctx.meta())return noWr;
+ return null;
+}
+const qKey=(g,q)=>g==='counter'?q.role+q.enemy:g==='whowins'?q.blue.join()+q.red.join():g==='ban'?q.rank.join():g==='macro'?q.id:`${q.ans}|${q.opts.join()}`;
+export function mpGen(game,seed,n){
+ return withRng(seeded(`riftroom-mp-${game}-${seed}`),()=>{
+  if(game==='macro')return shuffle((scen?.de||[]).map(x=>x.id).sort()).slice(0,n).map(id=>({id}));
+  const make={counter:()=>makePuzzle(ROLE_KEYS),whowins:makeDuel,ban:makeBan,timer:makeTimerQ}[game];
+  const out=[],seen=new Set();
+  for(let t=0;t<n*4&&out.length<n;t++){const q=make();if(!q)break;const k=qKey(game,q);if(seen.has(k))continue;seen.add(k);out.push(q);}
+  return out;
+ });
+}
+export function mpSig(game,qs){const str=qs.map(q=>qKey(game,q)).join('/');let h=7;for(let i=0;i<str.length;i++)h=Math.imul(h,31)+str.charCodeAt(i)>>>0;return h.toString(36)+'-'+qs.length;}
+export const mpMax=(game,n)=>game==='timer'?n*170:game==='whowins'?n:n*2;
+// Punkte und Farbe (2 grün, 1 gelb, 0 rot) einer Antwort.
+export function mpGrade(game,q,val,left=0){
+ if(game==='counter'){const g=gradeOf(q,val);return{pts:g==='best'?2:g==='good'?1:0,mark:g==='best'?'2':g==='good'?'1':'0'};}
+ if(game==='whowins'){const ok=(val==='blue')===(q.total>0);return{pts:ok?1:0,mark:ok?'2':'0'};}
+ if(game==='ban'){const r=q.rank.indexOf(val),p=r===0?2:r>=1&&r<=2?1:0;return{pts:p,mark:String(p)};}
+ if(game==='macro'){const s=scenList().find(x=>x.id===q.id),p=s?.opts[val]?.s||0;return{pts:p,mark:String(p)};}
+ const ok=val===q.ans;return{pts:ok?Math.round(50+left*10):0,mark:ok?'2':'0'};
+}
+export function mpCard(game,q,answer,gain,left,next){
+ const has=answer!=null;
+ if(game==='counter')return puzzleCard({...q,answer:has?answer:null,grade:has?gradeOf(q,answer):null},'data-mp-pick',next);
+ if(game==='whowins')return duelView({...q,answer:has?answer:null,right:has&&(answer==='blue')===(q.total>0)},'data-mp-pick',next);
+ if(game==='ban'){const r=has?q.rank.indexOf(answer):-1;return banView({...q,answer:has?answer:null,pts:r===0?2:r>=1&&r<=2?1:0},'data-mp-pick',next);}
+ if(game==='macro'){
+  const s=scenList().find(x=>x.id===q.id);if(!s)return'';
+  const res=has?`<div class="mq-next"><span class="mq-pts">${s.opts[answer].s===2?'+2 Punkte':s.opts[answer].s===1?'+1 Punkt':'0 Punkte'}</span>${next}</div>`:'';
+  return macroView(s,has?answer:null,'data-mp-pick',res);
+ }
+ return timerView(q,has?answer:null,gain,left,'data-mp-pick',next,'mp');
+}
+export const MP_SECS=TQ_SECS;
 
 /* ---------- Schnittstelle zur App ---------- */
 export function setMatchups(d){if(d?.roles&&(!mu||d.updatedAt>(mu.updatedAt||'')))mu=d;}

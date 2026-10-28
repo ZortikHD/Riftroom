@@ -39,8 +39,8 @@ const name=id=>ctx.esc(ctx.cname(id));
 const icon=id=>`<img src="${ctx.SQUARE[id]}" alt="">`;
 const spinner='<section class="card pz-loading"><div class="spinner"></div></section>';
 // Startbildschirm wie bei „Champion raten“: Titel, Regeln, Stand und ein großer Start-Knopf.
-function hero({art,badge,t1,t2,rules,demo='',extra='',stats='',btn,act}){
- return`<section class="mg-hero pz-hero"><img class="pz-hero-art" src="${ctx.LOADING[art]||''}" alt=""><div class="mg-hero-in"><span class="mg-badge">${badge}</span><h1 class="mg-title"><span>${t1}</span><span>${t2}</span></h1>${demo?`<div class="pz-demo" aria-hidden="true">${demo}</div>`:''}<p class="mg-rules">${rules}</p>${stats?`<div class="pz-hero-stats">${stats}</div>`:''}${extra}<button class="mg-go" ${act}><span>${btn}</span></button></div></section>`;
+function hero({art,badge,t1,t2,rules,demo='',extra='',stats='',btn,act,friends=''}){
+ return`<section class="mg-hero pz-hero"><img class="pz-hero-art" src="${ctx.LOADING[art]||''}" alt=""><div class="mg-hero-in"><span class="mg-badge">${badge}</span><h1 class="mg-title"><span>${t1}</span><span>${t2}</span></h1>${demo?`<div class="pz-demo" aria-hidden="true">${demo}</div>`:''}<p class="mg-rules">${rules}</p>${stats?`<div class="pz-hero-stats">${stats}</div>`:''}${extra}<button class="mg-go" ${act}><span>${btn}</span></button>${friends&&ctx.friendsBtn?ctx.friendsBtn(friends):''}</div></section>`;
 }
 const stat=(v,l)=>`<span><b>${v}</b>${l}</span>`;
 // Ergebnis einer Runde: große Zahl, Kästchen pro Aufgabe, Nochmal-Knopf.
@@ -107,7 +107,7 @@ const dotsOf=(list,i,n)=>Array.from({length:n},(_,k)=>`<i class="${list[k]||''} 
 function counterHtml(){
  if(!mu){fetchData('matchups');return loading.matchups==='error'?dataError('matchups'):spinner;}
  const roleSeg=`<div class="seg pz-roles" role="group" aria-label="Role">${['ALL',...ROLE_KEYS].map(r=>`<button data-pz-role="${r}" aria-pressed="${pz.role===r}">${r==='ALL'?'All':ROLE_LABEL[r]}</button>`).join('')}</div>`;
- if(!cr)return hero({art:'Yasuo',badge:'Minigame',t1:'Counter',t2:'Puzzle',rules:`You see an opponent and pick the best counter out of four champions. ${CP_N} puzzles per round. Your rating rises and falls like on Chess.com.`,demo:['?','?','★','?'].map((x,i)=>`<span class="pz-demo-card ${x==='★'?'hit':''}" style="--i:${i}">${x}</span>`).join(''),stats:stat(pz.rating,'Rating')+stat(pz.best,'best streak')+stat(pz.games,'played'),extra:`<div class="pz-hero-roles"><span class="fine">Role</span>${roleSeg}</div>`,btn:'Start round',act:'data-pz="start"'});
+ if(!cr)return hero({art:'Yasuo',badge:'Minigame',t1:'Counter',t2:'Puzzle',rules:`You see an opponent and pick the best counter out of four champions. ${CP_N} puzzles per round. Your rating rises and falls like on Chess.com.`,demo:['?','?','★','?'].map((x,i)=>`<span class="pz-demo-card ${x==='★'?'hit':''}" style="--i:${i}">${x}</span>`).join(''),stats:stat(pz.rating,'Rating')+stat(pz.best,'best streak')+stat(pz.games,'played'),extra:`<div class="pz-hero-roles"><span class="fine">Role</span>${roleSeg}</div>`,btn:'Start round',act:'data-pz="start"',friends:'counter'});
  if(cr.done){const gain=pz.rating-cr.from;return roundEnd({badge:'Round complete',pre:gain>=0?'+':'−',big:Math.abs(gain),unit:'Rating',sq:cr.grades.map(sqOf).join(''),text:`${cr.grades.filter(g=>g==='best').length} of ${CP_N} solved perfectly. Your rating: ${pz.rating}.`,act:'data-pz="start"'});}
  if(!cp)newPuzzle();
  if(!cp)return'<section class="card empty"><h2>No puzzle found</h2><p>There is not enough data for this role right now. Pick another role.</p></section>';
@@ -220,18 +220,22 @@ function answerDuel(side){
 function duelHtml(){
  if(!mu){fetchData('matchups');return loading.matchups==='error'?dataError('matchups'):spinner;}
  if(!ctx.meta())return'<section class="card empty"><h2>No win rates yet</h2><p>This game needs the current win rates. They load automatically once there is a connection.</p></section>';
- if(!wr)return hero({art:'Jinx',badge:'Minigame',t1:'Who',t2:'wins?',rules:`Two drafts face off. Guess which team is ahead based on the lane matchups. ${WW_N} duels per round.`,demo:'<span class="pz-demo-vs b">Blue</span><span class="pz-demo-x">VS</span><span class="pz-demo-vs r">Red</span>',stats:stat(wws.best,'best streak')+stat(`${wws.right}/${wws.played}`,'correct'),btn:'Start round',act:'data-ww="start"'});
+ if(!wr)return hero({art:'Jinx',badge:'Minigame',t1:'Who',t2:'wins?',rules:`Two drafts face off. Guess which team is ahead based on the lane matchups. ${WW_N} duels per round.`,demo:'<span class="pz-demo-vs b">Blue</span><span class="pz-demo-x">VS</span><span class="pz-demo-vs r">Red</span>',stats:stat(wws.best,'best streak')+stat(`${wws.right}/${wws.played}`,'correct'),btn:'Start round',act:'data-ww="start"',friends:'whowins'});
  if(wr.done){const n=wr.res.filter(x=>x==='best').length;return roundEnd({badge:'Round complete',big:n,unit:`/${WW_N}`,sq:wr.res.map(sqOf).join(''),text:n>=8?'You read drafts like an analyst.':n>=5?'Solid. Watch for the biggest lane advantages.':'Look at the lane bars and it will go better.',act:'data-ww="start"'});}
  if(!ww)ww=makeDuel();
  if(!ww)return'<section class="card empty"><h2>No matchup found</h2><p>Data is missing right now. Try again later.</p></section>';
+ return`<section class="card ww-card"><div class="pz-head"><div class="pz-rating"><span class="fine">Streak</span><b>${wws.streak}</b></div><span class="dl-dots pz-dots">${dotsOf(wr.res,wr.i,WW_N)}</span></div>${duelView(ww,'data-ww-pick',`<button class="btn primary" data-ww="next">${wr.i+1<WW_N?'Next duel':'Result'}</button>`)}</section>`;
+}
+// Die Duell-Karte, genutzt allein und in der Lobby.
+function duelView(ww,pickAttr,next){
  const done=!!ww.answer,favBlue=ww.total>0;
  const team=(ids,side)=>`<div class="ww-team ${side} ${done&&(side==='blue')===favBlue?'fav':''}">${ids.map((id,k)=>`<div class="ww-row" style="--i:${k}"><img class="ww-art" src="${ctx.LOADING[id]||ctx.SQUARE[id]}" alt=""><span class="role-label">${ROLE_LABEL[ROLE_KEYS[k]]}</span><strong>${name(id)}</strong></div>`).join('')}</div>`;
  const max=Math.max(4,...ww.lanes.map(l=>Math.abs(l.edge)));
  const lanes=done?`<div class="ww-lanes">${ww.lanes.map((l,k)=>{const w=Math.abs(l.edge)/max*50;return`<div class="ww-lane" style="--i:${k}"><span class="ww-l">${icon(l.b)}</span><span class="ww-track"><i class="${l.edge>=0?'b':'r'}" style="${l.edge>=0?`right:50%`:`left:50%`};width:${w}%"></i><em>${ROLE_LABEL[l.role]} · ${l.edge>=0?'+':''}${l.edge.toFixed(1).replace('.',de()?',':'.')}</em></span><span class="ww-l">${icon(l.r)}</span></div>`;}).join('')}</div>`:'';
  const winBar=done?`<div class="ww-win"><span class="b" style="width:${ww.win}%">${Math.round(ww.win)} %</span><span class="r">${Math.round(100-ww.win)} %</span></div>`:'';
- const verdict=done?`<div class="pz-verdict ${ww.right?'best':'bad'}"><strong>${ww.right?'Correct!':'Wrong'}</strong><p>${favBlue?'Blue':'Red'} is ahead: ${ww.lanes.filter(l=>(l.edge>0)===favBlue).length} of 5 lane matchups go to ${favBlue?'Blue':'Red'}. Estimated win chance ${Math.round(Math.max(ww.win,100-ww.win))} %.</p><button class="btn primary" data-ww="next">${wr.i+1<WW_N?'Next duel':'Result'}</button></div>`:'';
- const ask=done?'':`<div class="ww-ask"><p>Which team do the stats favor?</p><div class="row"><button class="btn ww-pick blue" data-ww-pick="blue">Blue</button><button class="btn ww-pick red" data-ww-pick="red">Red</button></div></div>`;
- return`<section class="card ww-card"><div class="pz-head"><div class="pz-rating"><span class="fine">Streak</span><b>${wws.streak}</b></div><span class="dl-dots pz-dots">${dotsOf(wr.res,wr.i,WW_N)}</span></div><div class="ww-board">${team(ww.blue,'blue')}<div class="ww-vs">VS</div>${team(ww.red,'red')}</div>${ask}${lanes}${winBar}${verdict}<p class="fine pz-src">Based on the win rates of the five lane matchups (${ctx.esc(mu.rank)}, Patch ${ctx.esc(mu.patch)}). An estimate, not a guarantee.</p></section>`;
+ const verdict=done?`<div class="pz-verdict ${ww.right?'best':'bad'}"><strong>${ww.right?'Correct!':'Wrong'}</strong><p>${favBlue?'Blue':'Red'} is ahead: ${ww.lanes.filter(l=>(l.edge>0)===favBlue).length} of 5 lane matchups go to ${favBlue?'Blue':'Red'}. Estimated win chance ${Math.round(Math.max(ww.win,100-ww.win))} %.</p>${next}</div>`:'';
+ const ask=done?'':`<div class="ww-ask"><p>Which team do the stats favor?</p><div class="row"><button class="btn ww-pick blue" ${pickAttr}="blue">Blue</button><button class="btn ww-pick red" ${pickAttr}="red">Red</button></div></div>`;
+ return`<div class="ww-board">${team(ww.blue,'blue')}<div class="ww-vs">VS</div>${team(ww.red,'red')}</div>${ask}${lanes}${winBar}${verdict}<p class="fine pz-src">Based on the win rates of the five lane matchups (${ctx.esc(mu.rank)}, Patch ${ctx.esc(mu.patch)}). An estimate, not a guarantee.</p>`;
 }
 
 /* ---------- Ban-Puzzle ---------- */
@@ -270,15 +274,18 @@ function answerBan(id){
 }
 function banHtml(){
  if(!ctx.meta())return'<section class="card empty"><h2>No win rates yet</h2><p>This game needs the current win rates. They load automatically once there is a connection.</p></section>';
- if(!br)return hero({art:'Zed',badge:'Minigame',t1:'Ban',t2:'Puzzle',rules:`You see an enemy team with their champion pools. Which ban hurts them most? ${BP_N} teams per round, best ban scores 2 points.`,demo:['','✕',''].map((x,i)=>`<span class="pz-demo-card ${x?'ban':''}" style="--i:${i}">${x||'?'}</span>`).join(''),stats:stat(bps.best,'best streak')+stat(bps.played,'played'),btn:'Start round',act:'data-bp="start"'});
+ if(!br)return hero({art:'Zed',badge:'Minigame',t1:'Ban',t2:'Puzzle',rules:`You see an enemy team with their champion pools. Which ban hurts them most? ${BP_N} teams per round, best ban scores 2 points.`,demo:['','✕',''].map((x,i)=>`<span class="pz-demo-card ${x?'ban':''}" style="--i:${i}">${x||'?'}</span>`).join(''),stats:stat(bps.best,'best streak')+stat(bps.played,'played'),btn:'Start round',act:'data-bp="start"',friends:'ban'});
  if(br.done){const n=br.res.reduce((s,x)=>s+(x==='best'?2:x==='good'?1:0),0);return roundEnd({badge:'Round complete',big:n,unit:`/${BP_N*2}`,sq:br.res.map(sqOf).join(''),text:n>=8?'You spot the weak points right away.':n>=5?'Solid. Look for players with few fallback picks.':'Tip: a player who plays almost only one champion is the best target.',act:'data-bp="start"'});}
  if(!bp)bp=makeBan();
  if(!bp)return'<section class="card empty"><h2>No puzzle found</h2><p>Data is missing right now. Try again later.</p></section>';
+ return`<section class="card bp-card"><div class="pz-head"><div class="pz-rating"><span class="fine">Streak</span><b>${bps.streak}</b></div><span class="dl-dots pz-dots">${dotsOf(br.res,br.i,BP_N)}</span></div>${banView(bp,'data-bp-pick',`<button class="btn primary" data-bp="next">${br.i+1<BP_N?'Next team':'Result'}</button>`)}</section>`;
+}
+function banView(bp,pickAttr,next){
  const done=!!bp.answer,maxI=Math.max(...bp.players.flatMap(p=>p.champs.map(c=>c.impact)),0.1);
- const cards=bp.players.map((p,i)=>`<div class="bp-player" style="--i:${i}"><div class="bp-ph"><span class="role-label">${ROLE_LABEL[p.role]}</span><span class="fine">${p.games} games</span></div>${p.champs.map(c=>{const cls=!done?'':c.id===bp.bestId?'best':bp.rank.indexOf(c.id)<=2?'good':'';return`<button class="bp-champ ${cls} ${bp.answer===c.id?'mine':''}" data-bp-pick="${c.id}" ${done?'disabled':''}>${icon(c.id)}<span class="bp-info"><b>${name(c.id)}</b><small>${Math.round(c.share*100)}% of games · ${Math.round(c.wr)}% wins</small>${done?`<span class="bp-bar"><i style="width:${Math.max(3,c.impact/maxI*100)}%"></i></span>`:''}</span>${!done?'<span class="bp-x" aria-hidden="true">✕</span>':''}</button>`;}).join('')}</div>`).join('');
+ const cards=bp.players.map((p,i)=>`<div class="bp-player" style="--i:${i}"><div class="bp-ph"><span class="role-label">${ROLE_LABEL[p.role]}</span><span class="fine">${p.games} games</span></div>${p.champs.map(c=>{const cls=!done?'':c.id===bp.bestId?'best':bp.rank.indexOf(c.id)<=2?'good':'';return`<button class="bp-champ ${cls} ${bp.answer===c.id?'mine':''}" ${pickAttr}="${c.id}" ${done?'disabled':''}>${icon(c.id)}<span class="bp-info"><b>${name(c.id)}</b><small>${Math.round(c.share*100)}% of games · ${Math.round(c.wr)}% wins</small>${done?`<span class="bp-bar"><i style="width:${Math.max(3,c.impact/maxI*100)}%"></i></span>`:''}</span>${!done?'<span class="bp-x" aria-hidden="true">✕</span>':''}</button>`;}).join('')}</div>`).join('');
  const b=bp.players.flatMap(p=>p.champs.map(c=>({...c,role:p.role}))).find(c=>c.id===bp.bestId);
- const verdict=done?`<div class="pz-verdict ${bp.pts===2?'best':bp.pts?'good':'bad'}"><strong>${bp.pts===2?'Perfect ban!':bp.pts?'Good ban':'Little impact'}</strong><p> ${name(b.id)} hurts the most: the ${ROLE_LABEL[b.role]} player picks it in ${Math.round(b.share*100)}% of games and wins ${Math.round(b.wr)}%. Without it he drops to about ${Math.round(b.backup)}%.</p><button class="btn primary" data-bp="next">${br.i+1<BP_N?'Next team':'Result'}</button></div>`:'<p class="bp-ask">Tap the champion you would ban.</p>';
- return`<section class="card bp-card"><div class="pz-head"><div class="pz-rating"><span class="fine">Streak</span><b>${bps.streak}</b></div><span class="dl-dots pz-dots">${dotsOf(br.res,br.i,BP_N)}</span></div><div class="bp-intro"><h2>The enemy team</h2><p class="fine">An example team with its recent games. Which ban takes the most away from them?</p></div><div class="bp-grid">${cards}</div>${verdict}</section>`;
+ const verdict=done?`<div class="pz-verdict ${bp.pts===2?'best':bp.pts?'good':'bad'}"><strong>${bp.pts===2?'Perfect ban!':bp.pts?'Good ban':'Little impact'}</strong><p> ${name(b.id)} hurts the most: the ${ROLE_LABEL[b.role]} player picks it in ${Math.round(b.share*100)}% of games and wins ${Math.round(b.wr)}%. Without it he drops to about ${Math.round(b.backup)}%.</p>${next}</div>`:'<p class="bp-ask">Tap the champion you would ban.</p>';
+ return`<div class="bp-intro"><h2>The enemy team</h2><p class="fine">An example team with its recent games. Which ban takes the most away from them?</p></div><div class="bp-grid">${cards}</div>${verdict}`;
 }
 
 /* ---------- Macro-Quiz ---------- */
@@ -325,7 +332,7 @@ function offMap(s){
 }
 function macroHtml(){
  if(!scen){fetchData('scenarios');return loading.scenarios==='error'?dataError('scenarios'):spinner;}
- if(!mq)return hero({art:'Nautilus',badge:'Minigame',t1:'Macro',t2:'Quiz',rules:`You see a situation on the map and get three options. The best one scores 2 points, an okay one 1 point. ${ROUND} situations per round, ${scenList().length} in total.`,demo:'<span class="pz-demo-dot b"></span><span class="pz-demo-dot b me"></span><span class="pz-demo-dot obj"></span><span class="pz-demo-dot r"></span>',stats:mqs.best?stat(mqs.best,'Best')+stat(mqs.rounds,'rounds'):'',btn:'Start round',act:'data-mq="again"'});
+ if(!mq)return hero({art:'Nautilus',badge:'Minigame',t1:'Macro',t2:'Quiz',rules:`You see a situation on the map and get three options. The best one scores 2 points, an okay one 1 point. ${ROUND} situations per round, ${scenList().length} in total.`,demo:'<span class="pz-demo-dot b"></span><span class="pz-demo-dot b me"></span><span class="pz-demo-dot obj"></span><span class="pz-demo-dot r"></span>',stats:mqs.best?stat(mqs.best,'Best')+stat(mqs.rounds,'rounds'):'',btn:'Start round',act:'data-mq="again"',friends:'macro'});
  const all=scenList();
  if(mq.done){
   const max=ROUND*2;
@@ -333,12 +340,14 @@ function macroHtml(){
  }
  const s=all.find(x=>x.id===mq.ids[mq.i]);if(!s){mq=null;return macroHtml();}
  const dots=mq.ids.map((_,k)=>`<i class="${k<mq.i?'done':k===mq.i?'now':''}"></i>`).join('');
- const opts=s.opts.map((o,k)=>{const done=mq.answer!=null;const cls=!done?'':['bad','ok','best'][o.s];
-  return`<button class="mq-opt ${cls} ${mq.answer===k?'mine':''}" style="--i:${k}" data-mq-pick="${k}" ${done?'disabled':''}><span class="mq-letter">${'ABC'[k]}</span><span class="mq-t">${ctx.esc(o.t)}${done?`<small>${o.s===2?'Best choice':o.s===1?'Okay':'Bad'}: ${ctx.esc(o.why)}</small>`:''}</span></button>`;}).join('');
  const res=mq.answer!=null?`<div class="mq-next"><span class="mq-pts">${s.opts[mq.answer].s===2?'+2 points':s.opts[mq.answer].s===1?'+1 point':'0 points'}</span><button class="btn primary" data-mq="next">${mq.i+1<ROUND?'Next':'Result'}</button></div>`:'';
- return`<section class="card mq-card"><div class="mq-top"><span class="mq-dots" aria-label="Question ${mq.i+1} of ${ROUND}">${dots}</span><span class="fine">Points: <b>${mq.points}</b></span></div>
-  <div class="mq-grid"><div class="mq-mapwrap">${mapSvg(s)}${offMap(s)}<p class="fine mq-legend"><span class="lg blue"></span>Your team <span class="lg red"></span>Enemy <span class="lg me"></span>You</p></div>
-  <div class="mq-body"><div class="mq-meta"><span class="tag">You: ${LETTER_ROLE[s.role]}</span><span class="tag mq-clock">${ctx.esc(s.time)}</span></div><h2>${ctx.esc(s.title)}</h2><p>${ctx.esc(s.text)}</p><p class="mq-q">What is the best play?</p><div class="mq-opts">${opts}</div>${res}</div></div></section>`;
+ return`<section class="card mq-card"><div class="mq-top"><span class="mq-dots" aria-label="Question ${mq.i+1} of ${ROUND}">${dots}</span><span class="fine">Points: <b>${mq.points}</b></span></div>${macroView(s,mq.answer,'data-mq-pick',res)}</section>`;
+}
+function macroView(s,answer,pickAttr,res){
+ const opts=s.opts.map((o,k)=>{const done=answer!=null;const cls=!done?'':['bad','ok','best'][o.s];
+  return`<button class="mq-opt ${cls} ${answer===k?'mine':''}" style="--i:${k}" ${pickAttr}="${k}" ${done?'disabled':''}><span class="mq-letter">${'ABC'[k]}</span><span class="mq-t">${ctx.esc(o.t)}${done?`<small>${o.s===2?'Best choice':o.s===1?'Okay':'Bad'}: ${ctx.esc(o.why)}</small>`:''}</span></button>`;}).join('');
+ return`<div class="mq-grid"><div class="mq-mapwrap">${mapSvg(s)}${offMap(s)}<p class="fine mq-legend"><span class="lg blue"></span>Your team <span class="lg red"></span>Enemy <span class="lg me"></span>You</p></div>
+  <div class="mq-body"><div class="mq-meta"><span class="tag">You: ${LETTER_ROLE[s.role]}</span><span class="tag mq-clock">${ctx.esc(s.time)}</span></div><h2>${ctx.esc(s.title)}</h2><p>${ctx.esc(s.text)}</p><p class="mq-q">What is the best play?</p><div class="mq-opts">${opts}</div>${res}</div></div>`;
 }
 function answerMacro(k){
  if(!mq||mq.answer!=null)return;
@@ -393,17 +402,67 @@ function answerTimer(val){
 }
 function nextTimer(){if(!tq)return;if(tq.i+1<TQ_N){tq.i++;tq.answer=null;tq.deadline=0;}else{tq.done=true;tqs.rounds++;const rec=tq.points>tqs.best;tqs.best=Math.max(tqs.best,tq.points);store(TQ_KEY,tqs);if(rec||tq.right>=4)fx='best';}}
 function timerHtml(){
- if(!tq)return hero({art:'Zilean',badge:'Minigame',t1:'Timer',t2:'Quiz',rules:`When does the dragon respawn? When does the enemy have Flash again? ${TQ_N} questions, ${TQ_SECS} seconds. The faster you are, the more points you get.`,demo:'<div class="tq-clock big"><span>5:00</span></div>',stats:tqs.best?stat(tqs.best,'Best')+stat(tqs.rounds,'rounds'):'',btn:'Let\'s go',act:'data-tq="start"'});
+ if(!tq)return hero({art:'Zilean',badge:'Minigame',t1:'Timer',t2:'Quiz',rules:`When does the dragon respawn? When does the enemy have Flash again? ${TQ_N} questions, ${TQ_SECS} seconds. The faster you are, the more points you get.`,demo:'<div class="tq-clock big"><span>5:00</span></div>',stats:tqs.best?stat(tqs.best,'Best')+stat(tqs.rounds,'rounds'):'',btn:'Let\'s go',act:'data-tq="start"',friends:'timer'});
  if(tq.done){
   return`<section class="card mq-end"><span class="mg-badge">Round complete</span><h2><b data-countup="0">${tq.points}</b> points</h2><p class="fine">${tq.right} of ${TQ_N} correct. Best: ${tqs.best} points.</p><button class="mg-go small" data-tq="start"><span>Play again</span></button></section>`;
  }
  const q=tq.qs[tq.i],done=tq.answer!=null;
  const dots=tq.qs.map((x,k)=>`<i class="${k<tq.i?(x.ok?'best':'bad'):k===tq.i?'now':''}"></i>`).join('');
- const opts=q.opts.map((t,k)=>{const cls=!done?'':t===q.ans?'best':t===tq.answer?'bad':'';return`<button class="tq-opt ${cls}" style="--i:${k}" data-tq-pick="${t}" ${done?'disabled':''}>${mmss(t)}</button>`;}).join('');
- const res=done?`<div class="pz-verdict ${q.ok?'best':'bad'}"><strong>${q.ok?`+${q.gain}`:tq.answer===-1?'Time\'s up':'Wrong'}</strong><p>The answer is ${mmss(q.ans)}. ${ctx.esc(q.rule)}</p><button class="btn primary" data-tq="next">${tq.i+1<TQ_N?'Next':'Result'}</button></div>`:'';
  const left=done?0:Math.max(0,tq.deadline?(tq.deadline-Date.now())/1000:TQ_SECS);
- return`<section class="card tq-card"><div class="mq-top"><span class="mq-dots dl-dots">${dots}</span><span class="fine">Points: <b>${tq.points}</b></span></div><div class="tq-main"><div class="tq-ring" id="tq-ring" style="--p:${left/TQ_SECS}"><span id="tq-left">${Math.ceil(left)}</span></div><h2 class="tq-q">${ctx.esc(q.q)}</h2></div><div class="tq-opts">${opts}</div>${res}</section>`;
+ return`<section class="card tq-card"><div class="mq-top"><span class="mq-dots dl-dots">${dots}</span><span class="fine">Points: <b>${tq.points}</b></span></div>${timerView(q,tq.answer,q.gain,left,'data-tq-pick',`<button class="btn primary" data-tq="next">${tq.i+1<TQ_N?'Next':'Result'}</button>`,'tq')}</section>`;
 }
+function timerView(q,answer,gain,left,pickAttr,next,idp){
+ const done=answer!=null,ok=answer===q.ans;
+ const opts=q.opts.map((t,k)=>{const cls=!done?'':t===q.ans?'best':t===answer?'bad':'';return`<button class="tq-opt ${cls}" style="--i:${k}" ${pickAttr}="${t}" ${done?'disabled':''}>${mmss(t)}</button>`;}).join('');
+ const res=done?`<div class="pz-verdict ${ok?'best':'bad'}"><strong>${ok?`+${gain}`:answer===-1?'Time\'s up':'Wrong'}</strong><p>The answer is ${mmss(q.ans)}. ${ctx.esc(q.rule)}</p>${next}</div>`:'';
+ return`<div class="tq-main"><div class="tq-ring" id="${idp}-ring" style="--p:${left/TQ_SECS}"><span id="${idp}-left">${Math.ceil(left)}</span></div><h2 class="tq-q">${ctx.esc(q.q)}</h2></div><div class="tq-opts">${opts}</div>${res}`;
+}
+
+/* ---------- Mehrspieler (Lobby) ---------- */
+// Alle in einer Lobby erzeugen aus demselben Startwert dieselben Aufgaben, jeder bei sich und in seiner Sprache.
+// Die Prüfsumme zeigt, ob wirklich alle dieselben Aufgaben haben (sonst sind die Daten unterschiedlich alt).
+const noWr='<section class="card empty"><h2>No win rates yet</h2><p>This game needs the current win rates. They load automatically once there is a connection.</p></section>';
+export function mpReady(game,c){
+ if(c)ctx=c;
+ if(game==='timer')return null;
+ if(game==='macro'){if(!scen){fetchData('scenarios');return loading.scenarios==='error'?dataError('scenarios'):spinner;}return null;}
+ if(!mu){fetchData('matchups');return loading.matchups==='error'?dataError('matchups'):spinner;}
+ if((game==='whowins'||game==='ban')&&!ctx.meta())return noWr;
+ return null;
+}
+const qKey=(g,q)=>g==='counter'?q.role+q.enemy:g==='whowins'?q.blue.join()+q.red.join():g==='ban'?q.rank.join():g==='macro'?q.id:`${q.ans}|${q.opts.join()}`;
+export function mpGen(game,seed,n){
+ return withRng(seeded(`riftroom-mp-${game}-${seed}`),()=>{
+  if(game==='macro')return shuffle((scen?.de||[]).map(x=>x.id).sort()).slice(0,n).map(id=>({id}));
+  const make={counter:()=>makePuzzle(ROLE_KEYS),whowins:makeDuel,ban:makeBan,timer:makeTimerQ}[game];
+  const out=[],seen=new Set();
+  for(let t=0;t<n*4&&out.length<n;t++){const q=make();if(!q)break;const k=qKey(game,q);if(seen.has(k))continue;seen.add(k);out.push(q);}
+  return out;
+ });
+}
+export function mpSig(game,qs){const str=qs.map(q=>qKey(game,q)).join('/');let h=7;for(let i=0;i<str.length;i++)h=Math.imul(h,31)+str.charCodeAt(i)>>>0;return h.toString(36)+'-'+qs.length;}
+export const mpMax=(game,n)=>game==='timer'?n*170:game==='whowins'?n:n*2;
+// Punkte und Farbe (2 grün, 1 gelb, 0 rot) einer Antwort.
+export function mpGrade(game,q,val,left=0){
+ if(game==='counter'){const g=gradeOf(q,val);return{pts:g==='best'?2:g==='good'?1:0,mark:g==='best'?'2':g==='good'?'1':'0'};}
+ if(game==='whowins'){const ok=(val==='blue')===(q.total>0);return{pts:ok?1:0,mark:ok?'2':'0'};}
+ if(game==='ban'){const r=q.rank.indexOf(val),p=r===0?2:r>=1&&r<=2?1:0;return{pts:p,mark:String(p)};}
+ if(game==='macro'){const s=scenList().find(x=>x.id===q.id),p=s?.opts[val]?.s||0;return{pts:p,mark:String(p)};}
+ const ok=val===q.ans;return{pts:ok?Math.round(50+left*10):0,mark:ok?'2':'0'};
+}
+export function mpCard(game,q,answer,gain,left,next){
+ const has=answer!=null;
+ if(game==='counter')return puzzleCard({...q,answer:has?answer:null,grade:has?gradeOf(q,answer):null},'data-mp-pick',next);
+ if(game==='whowins')return duelView({...q,answer:has?answer:null,right:has&&(answer==='blue')===(q.total>0)},'data-mp-pick',next);
+ if(game==='ban'){const r=has?q.rank.indexOf(answer):-1;return banView({...q,answer:has?answer:null,pts:r===0?2:r>=1&&r<=2?1:0},'data-mp-pick',next);}
+ if(game==='macro'){
+  const s=scenList().find(x=>x.id===q.id);if(!s)return'';
+  const res=has?`<div class="mq-next"><span class="mq-pts">${s.opts[answer].s===2?'+2 points':s.opts[answer].s===1?'+1 point':'0 points'}</span>${next}</div>`:'';
+  return macroView(s,has?answer:null,'data-mp-pick',res);
+ }
+ return timerView(q,has?answer:null,gain,left,'data-mp-pick',next,'mp');
+}
+export const MP_SECS=TQ_SECS;
 
 /* ---------- Schnittstelle zur App ---------- */
 export function setMatchups(d){if(d?.roles&&(!mu||d.updatedAt>(mu.updatedAt||'')))mu=d;}

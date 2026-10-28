@@ -2,7 +2,9 @@
 // wird ein weiterer Buchstabe sichtbar. Wer richtig rät, geht zum nächsten Champion weiter.
 // Nach Ablauf der Zeit gewinnt, wer die meisten erraten hat.
 // Live über die room-Fähigkeit (nur presence, nichts wird gespeichert). Ohne Verbindung: allein spielen.
+import {joinLive} from './live.js';
 const STEP=5000,NICK_KEY='riftroom.nick';
+let lobbyMode=false;
 let ctx=null,room=null,roomTried=false,peers=[],me={nick:'',state:'lobby',game:null,score:0,cur:0},champStart=0,tick=null,dur=90000,flash=null,busy=false,streak=0,lastCount=null,celebrated=null;
 
 const norm=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
@@ -21,7 +23,7 @@ function activeGame(now=Date.now()){
  return best;
 }
 async function connect(){
- if(roomTried)return;roomTried=true;
+ if(roomTried||lobbyMode)return;roomTried=true;
  try{const lobby=window.claude?.use?await window.claude.use('room'):null;if(!lobby)return;room=await lobby.join('mini-champ-raten');
   room.onPeers(ch=>{peers=ch.peers;adopt();paintBoard();},()=>{room=null;paintBoard();});
   setPresence();}catch{room=null;}
@@ -34,6 +36,19 @@ function adopt(){
  joinGame(g);
 }
 function joinGame(g){me.game={id:g.id,seed:g.seed,start:g.start,dur:g.dur,host:String(g.host||'').slice(0,24)};me.state='play';me.score=0;me.cur=0;streak=0;busy=false;lastCount=null;champStart=Math.max(Date.now(),g.start);setPresence();ctx.rerender();}
+// In einer Lobby: eigener Raum, Startwert und Dauer kommen vom Host, gestartet wird bei allen gleichzeitig.
+export async function startLobbyGuess({name,seed,start,dur:d,nick,host,c}){
+ if(c)ctx=c;lobbyMode=true;try{room?.leave?.();}catch{}room=null;peers=[];
+ me.nick=String(nick||'').slice(0,24);dur=d;
+ joinGame({id:'lb-'+name,seed,start,dur:d,host});
+ try{room=await joinLive(name);if(room&&lobbyMode){room.onPeers(list=>{peers=list;paintBoard();},()=>{room=null;paintBoard();});setPresence();}}catch{room=null;}
+ paintBoard();
+}
+export function leaveLobbyGuess(){
+ if(!lobbyMode)return;lobbyMode=false;try{room?.leave?.();}catch{}room=null;peers=[];roomTried=false;
+ me.state='lobby';me.game=null;me.score=0;clearInterval(tick);
+}
+export function lobbyGuessResult(){return lobbyMode&&me.game?{done:me.state==='done',rows:standings(me.game)}:null;}
 function startGame(){
  if(!me.nick.trim()){ctx.toast('Enter your name first.',true);document.getElementById('mg-nick')?.focus();return;}
  joinGame({id:Math.random().toString(36).slice(2,10),seed:Math.floor(Math.random()*2**31),start:Date.now()+4000,dur,host:me.nick});
@@ -99,6 +114,7 @@ export function renderMini(c){
    <form id="mg-form" class="mg-form" autocomplete="off"><input class="field" id="mg-input" placeholder="Type a champion, press Enter" aria-label="Your answer" autocomplete="off" spellcheck="false"><button class="btn primary" type="submit">Guess</button><button class="btn ghost" type="button" data-mg="skip">Next</button></form>
   </section>${board}</div>`;
  }
+ if(lobbyMode)return`<div class="mg-grid"><div class="mg-main"><section class="card mg-result" id="mg-result">${me.state==='done'?resultHtml():''}</section><section class="card lb-back"><p class="fine">This round was played in your lobby. That is where it continues.</p><button class="mg-go small" data-minitab="lobby"><span>Back to the lobby</span></button></section></div>${board}</div>`;
  const res=me.state==='done'?`<section class="card mg-result" id="mg-result">${resultHtml()}</section>`:'';
  const hero=`<section class="mg-hero"><div class="mg-bubbles" aria-hidden="true">${bubbles()}</div><div class="mg-hero-in">
   <span class="mg-badge">Minigame</span>
@@ -113,7 +129,7 @@ export function renderMini(c){
 }
 function resultHtml(){
  const rows=standings(me.game),top=rows[0],tie=rows.length>1&&rows[1].score===top.score;
- const title=rows.length===1?`${me.score} champions guessed`:tie?'It’s a tie!':top.me?'Du hast gewonnen!':`${ctx.esc(top.nick)} wins!`;
+ const title=rows.length===1?`${me.score} champions guessed`:tie?'It’s a tie!':top.me?'You win!':`${ctx.esc(top.nick)} wins!`;
  const podium=[rows[1],rows[0],rows[2]].map((r,k)=>r?`<div class="mg-pod p${[2,1,3][k]}">${[2,1,3][k]===1?crown:''}${avatar(r.nick)}<span class="mg-pod-name">${ctx.esc(r.nick)}${r.me?' (you)':''}</span><div class="mg-pod-block"><b>${r.score}</b><span>${[2,1,3][k]}.</span></div></div>`:'<div class="mg-pod empty"></div>').join('');
  const rest=rows.slice(3).map((r,i)=>`<li class="${r.me?'me':''}"><span class="mg-pos">${i+4}.</span>${avatar(r.nick)}<span class="mg-nick">${ctx.esc(r.nick)}</span><b>${r.score}</b></li>`).join('');
  return`<h2 class="mg-res-title">${title}</h2><div class="mg-podium">${podium}</div>${rest?`<ol class="mg-rest">${rest}</ol>`:''}`;
@@ -130,7 +146,7 @@ function paintBoard(){
   const list=rows.filter(r=>r.same).sort((a,b)=>b.score-a.score),max=Math.max(5,...list.map(r=>r.score));
   html=`<ul class="mg-race">${list.map((r,i)=>`<li class="${r.me?'me':''}" style="--c:${colorOf(r.nick)}">${avatar(r.nick)}<div class="mg-lane"><span class="mg-nick">${i===0&&r.score>0?crown:''}${ctx.esc(r.nick)}${r.me?' (you)':''}</span><div class="mg-track"><i style="width:${Math.max(4,r.score/max*100)}%"></i></div></div><b>${r.score}</b></li>`).join('')}</ul>`;
  }else html=`<ul class="mg-lobby">${rows.map(r=>`<li class="${r.me?'me':''}">${avatar(r.nick)}<span class="mg-nick">${ctx.esc(r.nick)}${r.me?' (you)':''}</span><span class="mg-chip ${r.state==='play'?'play':''}">${r.state==='play'?'playing':'ready'}</span></li>`).join('')}</ul>`;
- el.innerHTML=html+(room?(others.length?'':'<p class="fine">Nobody else here yet. Send your team the link to make it a race.</p>'):'<p class="fine">No live connection. You are playing alone.</p>');
+ el.innerHTML=html+(lobbyMode?(others.length?'':'<p class="fine">The others from your lobby are joining in a moment.</p>'):room?(others.length?'':'<p class="fine">Nobody else here yet. Send your team the link to make it a race.</p>'):'<p class="fine">No live connection. You are playing alone.</p>');
 }
 function paintStreak(){const el=document.getElementById('mg-streak');if(!el)return;el.textContent=streak>=2?`Streak ×${streak}`:'';el.classList.toggle('on',streak>=2);if(streak>=2){el.classList.remove('pop');void el.offsetWidth;el.classList.add('pop');}}
 function confetti(host,count=36){

@@ -6,6 +6,8 @@ import {ROLES,ROLE_NAMES,OPP_REGIONS,emptyOppPlayers,profileOf,learnRoles,useCat
 import {poolCheck,banSuggestions,biggestChanges,draftTurn} from './insights.js';
 import {renderMini,mountMini,handleMiniClick,handleMiniInput,handleMiniSubmit} from './minigame.js';
 import {renderPuzzle,handlePuzzleClick,afterPuzzle,miniStats,setMatchups} from './puzzles.js';
+import {renderLobby,afterLobby,handleLobbyClick,handleLobbyInput,openLobbyLink,lobbyInfo} from './lobby.js';
+import {setSupabase} from './live.js';
 import {BIS} from './bis.js';
 import {strengthsWeaknesses,timeline,benchmarks,OBJECTIVES,PLAN_ROLES,PLAN_ROLE_NAMES,roleTimeline} from './gameplan.js';
 import {guide,initGuide,startTour,tourRunning} from './guide.js';
@@ -36,7 +38,7 @@ let practice=null,pendingRemote=null,prSide='blue',prTimer=true,prFearless=false
 const planNotes=new Map();
 const isNew=(type,i)=>!!(lastBoard&&state[type][i]&&lastBoard[type][i]!==state[type][i]);
 // Minispiele: Auswahl als Kacheln mit Champion-Bild. Der zuletzt gewählte Reiter bleibt gemerkt.
-const MINI_GAMES=[['counter','Counter-Puzzle','Yasuo','Finde den besten Konter'],['daily','Tägliches Puzzle','Ahri','Für alle gleich, mit Rangliste'],['whowins','Wer gewinnt?','Jinx','Zwei Drafts, ein Favorit'],['ban','Ban-Puzzle','Zed','Welcher Ban tut am meisten weh?'],['macro','Macro-Quiz','Nautilus','Der beste Play auf der Karte'],['timer','Timer-Quiz','Zilean','Respawns und Flash im Kopf'],['guess','Champion raten','Neeko','Buchstabe für Buchstabe']];
+const MINI_GAMES=[['lobby','Mit Freunden','Teemo','1 gegen 1 bis 4 Spieler'],['counter','Counter-Puzzle','Yasuo','Finde den besten Konter'],['daily','Tägliches Puzzle','Ahri','Für alle gleich, mit Rangliste'],['whowins','Wer gewinnt?','Jinx','Zwei Drafts, ein Favorit'],['ban','Ban-Puzzle','Zed','Welcher Ban tut am meisten weh?'],['macro','Macro-Quiz','Nautilus','Der beste Play auf der Karte'],['timer','Timer-Quiz','Zilean','Respawns und Flash im Kopf'],['guess','Champion raten','Neeko','Buchstabe für Buchstabe']];
 let miniTab='counter';try{const t=localStorage.getItem('riftroom.minitab');if(MINI_GAMES.some(g=>g[0]===t))miniTab=t;}catch{}
 // Rangliste fürs tägliche Puzzle: in Claude über die gemeinsame Datenbank, in der GitHub-Version über Supabase.
 const dailyBoard={
@@ -53,13 +55,16 @@ const dailyBoard={
  }
 };
 const dailyPid=()=>{try{return localStorage.getItem('riftroom.pid')||'';}catch{return'';}};
-const pzCtx={catalog:()=>catalog,meta:()=>state.meta,esc:v=>esc(v),cname:id=>cname(id),SQUARE,LOADING,toast:(m,e)=>toast(m,e),burst:(h,n)=>burst(h,n),board:dailyBoard,rerender:()=>{if(page==='mini')render();}};
+const pzCtx={friendsBtn:g=>`<button class="btn pz-friends" data-lobby-new="${g}">${icon('users')}Mit Freunden spielen</button>`,catalog:()=>catalog,meta:()=>state.meta,esc:v=>esc(v),cname:id=>cname(id),SQUARE,LOADING,toast:(m,e)=>toast(m,e),burst:(h,n)=>burst(h,n),board:dailyBoard,rerender:()=>{if(page==='mini')render();}};
 function renderMiniPage(){
  const st=miniStats();
- const tiles=`<div class="game-hub" role="tablist" aria-label="Minispiele">${MINI_GAMES.map(([k,l,art,sub],i)=>`<button class="game-tile ${miniTab===k?'on':''}" role="tab" aria-selected="${miniTab===k}" data-minitab="${k}" style="--i:${i}"><img src="${LOADING[art]}" alt=""><span class="gt-text"><b>${l}</b><small>${st[k]?esc(st[k]):sub}</small></span>${k==='daily'&&st.daily!=='Erledigt'?'<i class="gt-new">Neu</i>':''}</button>`).join('')}</div>`;
- return tiles+(miniTab==='guess'?renderMini(miniCtx):renderPuzzle(miniTab,pzCtx));
+ const tiles=`<div class="game-hub" role="tablist" aria-label="Minispiele">${MINI_GAMES.map(([k,l,art,sub],i)=>`<button class="game-tile ${miniTab===k?'on':''} ${k==='lobby'?'mp':''}" role="tab" aria-selected="${miniTab===k}" data-minitab="${k}" style="--i:${i}"><img src="${LOADING[art]}" alt=""><span class="gt-text"><b>${l}</b><small>${k==='lobby'&&lobbyInfo()?'Lobby '+esc(lobbyInfo()):st[k]?esc(st[k]):sub}</small></span>${k==='daily'&&st.daily!=='Erledigt'?'<i class="gt-new">Neu</i>':''}</button>`).join('')}</div>`;
+ return tiles+(miniTab==='guess'?renderMini(miniCtx):miniTab==='lobby'?renderLobby(lbCtx):renderPuzzle(miniTab,pzCtx));
 }
 const miniCtx={catalog:()=>catalog,esc:v=>esc(v),portrait:id=>portrait(id,'av'),toast:(m,e)=>toast(m,e),rerender:()=>{if(page==='mini')render();}};
+const setMiniTab=t=>{miniTab=t;try{localStorage.setItem('riftroom.minitab',t);}catch{}if(page==='mini'){render();window.scrollTo({top:0,behavior:'instant'});}};
+const lbCtx={esc:v=>esc(v),LOADING,SQUARE,icon:n=>icon(n),toast:(m,e)=>toast(m,e),burst:(h,n)=>burst(h,n),standalone:STANDALONE,rerender:()=>{if(page==='mini')render();},setTab:setMiniTab,tab:()=>miniTab,page:()=>page,pz:pzCtx,mg:miniCtx};
+if(STANDALONE)setSupabase(()=>loadSb());
 const MAIN_PAGES={draft:'Draft',team:'Team',opponents:'Gegner',meta:'Meta'};
 const MORE_PAGES={games:'Ergebnisse',mini:'Minispiele',settings:'Daten & Sicherung'};
 const PAGES={...MAIN_PAGES,...MORE_PAGES};
@@ -145,7 +150,8 @@ function render(){
  placeTabInk();decorateEmpty();
  lastPageRendered=page;
  if(page==='mini'&&miniTab==='guess')mountMini(miniCtx);
- if(page==='mini'&&miniTab!=='guess')afterPuzzle(miniTab);
+ if(page==='mini'&&miniTab!=='guess'&&miniTab!=='lobby')afterPuzzle(miniTab);
+ if(page==='mini'&&miniTab==='lobby')afterLobby();
  setTimeout(autoTour,350);
 }
 
@@ -1170,6 +1176,7 @@ document.addEventListener('click',e=>{
 document.addEventListener('click',e=>{
  const el=e.target.closest('button');if(!el||el.disabled)return;
  if(el.dataset.minitab){miniTab=el.dataset.minitab;try{localStorage.setItem('riftroom.minitab',miniTab);}catch{}render();return;}
+ if(handleLobbyClick(el))return;
  if(page==='mini'&&miniTab!=='guess'&&handlePuzzleClick(el))return;
  if(handleMiniClick(el))return;
  if(el.dataset.page){page=el.dataset.page;if(page==='meta'&&catalog&&state.meta&&state.seenPatch!==shortPatch(catalog.version)){state.seenPatch=shortPatch(catalog.version);save();}saveUi();render();window.scrollTo({top:0,behavior:'instant'});return;}
@@ -1264,7 +1271,7 @@ document.addEventListener('keydown',e=>{
  if(e.key.length===1&&/[\p{L}\d]/u.test(e.key)&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)){s.focus();}
 });
 document.addEventListener('toggle',e=>{if(e.target.id==='fold-templates')templatesOpen=e.target.open;if(e.target.id==='bis'){bisOpen=e.target.open;saveBis();}},true);
-document.addEventListener('input',e=>{const t=e.target;if(handleMiniInput(t))return;if(t.id==='team-name'){state.teamName=t.value.trim()||'Mein Team';save();}if(t.dataset.playerName!=null){state.players[Number(t.dataset.playerName)].name=t.value.trim()||'Spieler '+(Number(t.dataset.playerName)+1);save();}if(t.id==='cs-search'){csSearch=t.value;const g=$('#cs-grid');if(g)g.innerHTML=csGrid();}if(t.id==='picker-search'){pickerSearch=t.value;renderPickerGrid();}if(t.id==='meta-search'){metaSearch=t.value;$('#meta-table').innerHTML=metaTable();}if(t.id==='opp-notes'){const o=selOpp();if(o){o.notes=t.value.slice(0,4000);save();}}});
+document.addEventListener('input',e=>{const t=e.target;if(handleLobbyInput(t))return;if(handleMiniInput(t))return;if(t.id==='team-name'){state.teamName=t.value.trim()||'Mein Team';save();}if(t.dataset.playerName!=null){state.players[Number(t.dataset.playerName)].name=t.value.trim()||'Spieler '+(Number(t.dataset.playerName)+1);save();}if(t.id==='cs-search'){csSearch=t.value;const g=$('#cs-grid');if(g)g.innerHTML=csGrid();}if(t.id==='picker-search'){pickerSearch=t.value;renderPickerGrid();}if(t.id==='meta-search'){metaSearch=t.value;$('#meta-table').innerHTML=metaTable();}if(t.id==='opp-notes'){const o=selOpp();if(o){o.notes=t.value.slice(0,4000);save();}}});
 document.addEventListener('change',e=>{const t=e.target;if(t.dataset.oppRiot!=null){const o=selOpp();if(o){const v=t.value.trim().replace(/\s*#\s*/,'#').slice(0,40);o.players[Number(t.dataset.oppRiot)].riotId=v;save();render();if(v&&!/^[^#]{3,16}#[^#\s]{2,5}$/.test(v))toast('Eine Riot-ID sieht so aus: Name#Tag, z. B. Faker#KR1. Ohne Tag findet op.gg das Profil nicht.',true);}return;}if(t.id==='opp-region'){const o=selOpp();if(o&&OPP_REGIONS.includes(t.value)){o.region=t.value;save();render();}return;}if(t.id==='opp-name'){const o=selOpp();if(o&&t.value.trim()){o.name=t.value.trim().slice(0,40);save();render();}}if(t.id==='draft-opponent'){state.opponentId=t.value;save();render();}if(t.id==='picker-role'){pickerRole=t.value;renderPickerGrid();}if(t.id==='pool-only'){state.poolOnly=t.checked;save();render();}if(t.id==='meta-role'){metaRole=t.value;$('#meta-table').innerHTML=metaTable();}if(t.id==='meta-sort'){metaSort=t.value;$('#meta-table').innerHTML=metaTable();}if(t.id==='team-name'){state.teamName=t.value.trim()||'Mein Team';save();render();}if(t.dataset.playerName!=null){state.players[Number(t.dataset.playerName)].name=t.value.trim()||`Spieler ${Number(t.dataset.playerName)+1}`;save();}});
 document.addEventListener('submit',e=>{if(handleMiniSubmit(e))return;if(e.target.id!=='settings-form')return;e.preventDefault();try{const patch=$('#target-patch').value.trim();if(patch&&!/^\d{1,2}\.\d{1,2}(\.\d+)?$/.test(patch))throw Error('Patch bitte im Format 16.20 oder 16.20.1 angeben.');state.targetPatch=patch;save();render();toast(patch?`Ziel-Patch ${patch} gespeichert.`:'Ziel-Patch folgt wieder dem aktuellen Patch.');}catch(err){$('#settings-error').textContent=err.message;}});
 document.addEventListener('error',e=>{if(e.target.tagName==='IMG'&&e.target.closest('.lock-splash')){e.target.remove();return;}if(e.target.tagName==='IMG'&&e.target.src.includes('/img/ld/')){e.target.src=e.target.src.replace('/img/ld/','/img/sq/');return;}if(e.target.tagName==='IMG'&&!e.target.dataset.fallback){e.target.dataset.fallback='1';e.target.src='icon.svg';e.target.style.objectFit='contain';e.target.style.opacity='.5';}},true);
@@ -1277,10 +1284,13 @@ function init(){
  initGuide({page:()=>page,go:k=>{page=k;saveUi();render();window.scrollTo({top:0,behavior:'instant'});},onEnd:()=>{if(page==='draft'&&!draftStarted())render();}});
  render();connect();
  if(STANDALONE)resumeRoom();
+ // Einladung in eine Minispiel-Lobby per Link.
+ const lb=STANDALONE?new URLSearchParams(location.search).get('lobby'):null;
+ if(lb&&openLobbyLink(lb,lbCtx)){page='mini';miniTab='lobby';render();}
 }
 init();
 
 // Mehr-Menü schließen, wenn außerhalb geklickt oder Escape gedrückt wird.
 document.addEventListener('click',e=>{for(const d of document.querySelectorAll('details.more[open]'))if(!d.contains(e.target))d.open=false;});
-document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id==='room-code'){e.preventDefault();joinRoom(e.target.value);}});
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id==='room-code'){e.preventDefault();joinRoom(e.target.value);}if(e.key==='Enter'&&e.target.id==='lb-code'){e.preventDefault();document.querySelector('[data-lb="join"]')?.click();}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')for(const d of document.querySelectorAll('details.more[open]'))d.open=false;});

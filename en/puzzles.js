@@ -38,6 +38,16 @@ const adj=(wr,n)=>(wr*n+50*200)/(n+200);
 const name=id=>ctx.esc(ctx.cname(id));
 const icon=id=>`<img src="${ctx.SQUARE[id]}" alt="">`;
 const spinner='<section class="card pz-loading"><div class="spinner"></div></section>';
+// Startbildschirm wie bei „Champion raten“: Titel, Regeln, Stand und ein großer Start-Knopf.
+function hero({art,badge,t1,t2,rules,demo='',extra='',stats='',btn,act}){
+ return`<section class="mg-hero pz-hero"><img class="pz-hero-art" src="${ctx.LOADING[art]||''}" alt=""><div class="mg-hero-in"><span class="mg-badge">${badge}</span><h1 class="mg-title"><span>${t1}</span><span>${t2}</span></h1>${demo?`<div class="pz-demo" aria-hidden="true">${demo}</div>`:''}<p class="mg-rules">${rules}</p>${stats?`<div class="pz-hero-stats">${stats}</div>`:''}${extra}<button class="mg-go" ${act}><span>${btn}</span></button></div></section>`;
+}
+const stat=(v,l)=>`<span><b>${v}</b>${l}</span>`;
+// Ergebnis einer Runde: große Zahl, Kästchen pro Aufgabe, Nochmal-Knopf.
+function roundEnd({badge,pre='',big,unit,sq,text,act}){
+ return`<section class="card mq-end pz-end"><span class="mg-badge">${badge}</span><div class="dl-score-big">${pre?`<em>${pre}</em>`:''}<b data-countup="0">${big}</b><span>${unit}</span></div>${sq?`<div class="dl-squares">${sq}</div>`:''}<p class="fine">${text}</p><button class="mg-go small" ${act}><span>Play again</span></button></section>`;
+}
+const sqOf=g=>g==='best'?'🟩':g==='good'?'🟨':'🟥';
 
 function fetchData(n){
  if(loading[n])return;loading[n]=true;
@@ -77,6 +87,7 @@ function answerPuzzle(id){
  pz.rating=Math.max(100,pz.rating+cp.delta);pz.games++;
  if(grade==='best'){pz.streak++;pz.solved++;fx='best';}else if(grade==='bad')pz.streak=0;
  pz.best=Math.max(pz.best,pz.streak);store(PZ_KEY,pz);
+ if(cr)cr.grades[cr.i]=grade;
 }
 // Eine Puzzle-Karte, genutzt vom Counter-Puzzle und vom täglichen Puzzle.
 function puzzleCard(p,pickAttr,next){
@@ -91,14 +102,18 @@ function puzzleCard(p,pickAttr,next){
  return`<div class="pz-enemy"><img class="pz-splash" src="${ctx.LOADING[enemy]||ctx.SQUARE[enemy]}" alt=""><div class="pz-enemy-text"><span class="role-label">Opponent · ${ROLE_LABEL[p.role]}</span><strong>${name(enemy)}</strong><span>Who wins most often against ${name(enemy)}?</span></div></div><div class="pz-opts">${optHtml}</div>${verdict}`;
 }
 const muSource=()=>`<p class="fine pz-src">Win rate in this matchup, patch ${ctx.esc(mu.patch)}, ${ctx.esc(mu.rank)}, Solo/Duo (${ctx.esc(mu.source)}). At least ${int(MIN_GAMES)} games.</p>`;
+const CP_N=10;let cr=null;
+const dotsOf=(list,i,n)=>Array.from({length:n},(_,k)=>`<i class="${list[k]||''} ${k===i?'now':''}"></i>`).join('');
 function counterHtml(){
  if(!mu){fetchData('matchups');return loading.matchups==='error'?dataError('matchups'):spinner;}
- if(!cp||(pz.role!=='ALL'&&cp.role!==pz.role&&!cp.answer))newPuzzle();
- if(!cp)return'<section class="card empty"><h2>No puzzle found</h2><p>There is not enough data for this role right now. Pick another role.</p></section>';
  const roleSeg=`<div class="seg pz-roles" role="group" aria-label="Role">${['ALL',...ROLE_KEYS].map(r=>`<button data-pz-role="${r}" aria-pressed="${pz.role===r}">${r==='ALL'?'All':ROLE_LABEL[r]}</button>`).join('')}</div>`;
+ if(!cr)return hero({art:'Yasuo',badge:'Minigame',t1:'Counter',t2:'Puzzle',rules:`You see an opponent and pick the best counter out of four champions. ${CP_N} puzzles per round. Your rating rises and falls like on Chess.com.`,demo:['?','?','★','?'].map((x,i)=>`<span class="pz-demo-card ${x==='★'?'hit':''}" style="--i:${i}">${x}</span>`).join(''),stats:stat(pz.rating,'Rating')+stat(pz.best,'best streak')+stat(pz.games,'played'),extra:`<div class="pz-hero-roles"><span class="fine">Role</span>${roleSeg}</div>`,btn:'Start round',act:'data-pz="start"'});
+ if(cr.done){const gain=pz.rating-cr.from;return roundEnd({badge:'Round complete',pre:gain>=0?'+':'−',big:Math.abs(gain),unit:'Rating',sq:cr.grades.map(sqOf).join(''),text:`${cr.grades.filter(g=>g==='best').length} of ${CP_N} solved perfectly. Your rating: ${pz.rating}.`,act:'data-pz="start"'});}
+ if(!cp)newPuzzle();
+ if(!cp)return'<section class="card empty"><h2>No puzzle found</h2><p>There is not enough data for this role right now. Pick another role.</p></section>';
  const delta=cp.answer?`<span class="pz-delta ${cp.delta>=0?'up':'down'}">${cp.delta>=0?'+':''}${cp.delta}</span>`:'';
- const head=`<div class="pz-head"><div class="pz-rating"><span class="fine">Your rating</span><b ${cp.answer?`data-countup="${cp.from}"`:''}>${pz.rating}</b>${delta}</div><div class="pz-stats"><span><b>${pz.streak}</b> streak</span><span><b>${pz.best}</b> best</span><span><b>${pz.games}</b> played</span></div>${roleSeg}</div>`;
- return`<section class="card pz-card">${head}${puzzleCard(cp,'data-pz-pick','<button class="btn primary" data-pz="next">Next puzzle</button>')}${muSource()}</section>`;
+ const head=`<div class="pz-head"><div class="pz-rating"><span class="fine">Your rating</span><b ${cp.answer?`data-countup="${cp.from}"`:''}>${pz.rating}</b>${delta}</div><div class="pz-stats"><span><b>${pz.streak}</b> streak</span></div><span class="dl-dots pz-dots" aria-label="Puzzle ${cr.i+1} of ${CP_N}">${dotsOf(cr.grades,cr.i,CP_N)}</span></div>`;
+ return`<section class="card pz-card">${head}${puzzleCard(cp,'data-pz-pick',`<button class="btn primary" data-pz="next">${cr.i+1<CP_N?'Next puzzle':'Result'}</button>`)}${muSource()}</section>`;
 }
 
 /* ---------- Tägliches Puzzle ---------- */
@@ -151,6 +166,8 @@ function boardHtml(){
 function dailyHtml(){
  if(!mu){fetchData('matchups');return loading.matchups==='error'?dataError('matchups'):spinner;}
  if(!daily||daily.date!==todayKey())initDaily();
+ const started=daily.started||daily.done||daily.puzzles.some(p=>p.answer);
+ if(!started)return hero({art:'Ahri',badge:'Today',t1:'Daily',t2:'Puzzle',rules:'Five counter puzzles, one per role, the same for everyone. Only your first try counts. Afterwards you can enter the leaderboard.',demo:['🟩','🟩','🟨','🟥','🟩'].map((x,i)=>`<span class="pz-demo-sq" style="--i:${i}">${x}</span>`).join(''),btn:'Start puzzle',act:'data-dl="start"'});
  if(!daily.puzzles.length)return'<section class="card empty"><h2>No puzzle today</h2><p>Data is missing right now. Try again later.</p></section>';
  const dateLabel=new Date().toLocaleDateString(de()?'en-US':'en-US',{weekday:'long',day:'numeric',month:'long'});
  const dots=daily.puzzles.map((p,k)=>`<i class="${p.grade||''} ${k===daily.i&&!daily.done?'now':''}"></i>`).join('');
@@ -194,14 +211,17 @@ function makeDuel(){
  }
  return null;
 }
+const WW_N=10;let wr=null;
 function answerDuel(side){
  if(!ww||ww.answer)return;
- ww.answer=side;const right=(side==='blue')===(ww.total>0);ww.right=right;
+ ww.answer=side;const right=(side==='blue')===(ww.total>0);ww.right=right;if(wr)wr.res[wr.i]=right?'best':'bad';
  wws.played++;if(right){wws.right++;wws.streak++;fx='best';}else wws.streak=0;wws.best=Math.max(wws.best,wws.streak);store(WW_KEY,wws);
 }
 function duelHtml(){
  if(!mu){fetchData('matchups');return loading.matchups==='error'?dataError('matchups'):spinner;}
  if(!ctx.meta())return'<section class="card empty"><h2>No win rates yet</h2><p>This game needs the current win rates. They load automatically once there is a connection.</p></section>';
+ if(!wr)return hero({art:'Jinx',badge:'Minigame',t1:'Who',t2:'wins?',rules:`Two drafts face off. Guess which team is ahead based on the lane matchups. ${WW_N} duels per round.`,demo:'<span class="pz-demo-vs b">Blue</span><span class="pz-demo-x">VS</span><span class="pz-demo-vs r">Red</span>',stats:stat(wws.best,'best streak')+stat(`${wws.right}/${wws.played}`,'correct'),btn:'Start round',act:'data-ww="start"'});
+ if(wr.done){const n=wr.res.filter(x=>x==='best').length;return roundEnd({badge:'Round complete',big:n,unit:`/${WW_N}`,sq:wr.res.map(sqOf).join(''),text:n>=8?'You read drafts like an analyst.':n>=5?'Solid. Watch for the biggest lane advantages.':'Look at the lane bars and it will go better.',act:'data-ww="start"'});}
  if(!ww)ww=makeDuel();
  if(!ww)return'<section class="card empty"><h2>No matchup found</h2><p>Data is missing right now. Try again later.</p></section>';
  const done=!!ww.answer,favBlue=ww.total>0;
@@ -209,9 +229,9 @@ function duelHtml(){
  const max=Math.max(4,...ww.lanes.map(l=>Math.abs(l.edge)));
  const lanes=done?`<div class="ww-lanes">${ww.lanes.map((l,k)=>{const w=Math.abs(l.edge)/max*50;return`<div class="ww-lane" style="--i:${k}"><span class="ww-l">${icon(l.b)}</span><span class="ww-track"><i class="${l.edge>=0?'b':'r'}" style="${l.edge>=0?`right:50%`:`left:50%`};width:${w}%"></i><em>${ROLE_LABEL[l.role]} · ${l.edge>=0?'+':''}${l.edge.toFixed(1).replace('.',de()?',':'.')}</em></span><span class="ww-l">${icon(l.r)}</span></div>`;}).join('')}</div>`:'';
  const winBar=done?`<div class="ww-win"><span class="b" style="width:${ww.win}%">${Math.round(ww.win)} %</span><span class="r">${Math.round(100-ww.win)} %</span></div>`:'';
- const verdict=done?`<div class="pz-verdict ${ww.right?'best':'bad'}"><strong>${ww.right?'Correct!':'Wrong'}</strong><p>${favBlue?'Blue':'Red'} is ahead: ${ww.lanes.filter(l=>(l.edge>0)===favBlue).length} of 5 lane matchups go to ${favBlue?'Blue':'Red'}. Estimated win chance ${Math.round(Math.max(ww.win,100-ww.win))}%.</p><button class="btn primary" data-ww="next">Next matchup</button></div>`:'';
+ const verdict=done?`<div class="pz-verdict ${ww.right?'best':'bad'}"><strong>${ww.right?'Correct!':'Wrong'}</strong><p>${favBlue?'Blue':'Red'} is ahead: ${ww.lanes.filter(l=>(l.edge>0)===favBlue).length} of 5 lane matchups go to ${favBlue?'Blue':'Red'}. Estimated win chance ${Math.round(Math.max(ww.win,100-ww.win))} %.</p><button class="btn primary" data-ww="next">${wr.i+1<WW_N?'Next duel':'Result'}</button></div>`:'';
  const ask=done?'':`<div class="ww-ask"><p>Which team do the stats favor?</p><div class="row"><button class="btn ww-pick blue" data-ww-pick="blue">Blue</button><button class="btn ww-pick red" data-ww-pick="red">Red</button></div></div>`;
- return`<section class="card ww-card"><div class="pz-head"><div class="pz-rating"><span class="fine">Streak</span><b>${wws.streak}</b></div><div class="pz-stats"><span><b>${wws.best}</b> best</span><span><b>${wws.right}/${wws.played}</b> correct</span></div></div><div class="ww-board">${team(ww.blue,'blue')}<div class="ww-vs">VS</div>${team(ww.red,'red')}</div>${ask}${lanes}${winBar}${verdict}<p class="fine pz-src">Based on the win rates of the five lane matchups (${ctx.esc(mu.rank)}, Patch ${ctx.esc(mu.patch)}). An estimate, not a guarantee.</p></section>`;
+ return`<section class="card ww-card"><div class="pz-head"><div class="pz-rating"><span class="fine">Streak</span><b>${wws.streak}</b></div><span class="dl-dots pz-dots">${dotsOf(wr.res,wr.i,WW_N)}</span></div><div class="ww-board">${team(ww.blue,'blue')}<div class="ww-vs">VS</div>${team(ww.red,'red')}</div>${ask}${lanes}${winBar}${verdict}<p class="fine pz-src">Based on the win rates of the five lane matchups (${ctx.esc(mu.rank)}, Patch ${ctx.esc(mu.patch)}). An estimate, not a guarantee.</p></section>`;
 }
 
 /* ---------- Ban-Puzzle ---------- */
@@ -242,20 +262,23 @@ function makeBan(){
  }
  return null;
 }
+const BP_N=5;let br=null;
 function answerBan(id){
  if(!bp||bp.answer||!bp.rank.includes(id))return;
- const r=bp.rank.indexOf(id),pts=r===0?2:r<=2?1:0;bp.answer=id;bp.pts=pts;
+ const r=bp.rank.indexOf(id),pts=r===0?2:r<=2?1:0;bp.answer=id;bp.pts=pts;if(br)br.res[br.i]=pts===2?'best':pts?'good':'bad';
  bps.played++;bps.points+=pts;if(pts===2){bps.streak++;fx='best';}else if(!pts)bps.streak=0;bps.best=Math.max(bps.best,bps.streak);store(BP_KEY,bps);
 }
 function banHtml(){
  if(!ctx.meta())return'<section class="card empty"><h2>No win rates yet</h2><p>This game needs the current win rates. They load automatically once there is a connection.</p></section>';
+ if(!br)return hero({art:'Zed',badge:'Minigame',t1:'Ban',t2:'Puzzle',rules:`You see an enemy team with their champion pools. Which ban hurts them most? ${BP_N} teams per round, best ban scores 2 points.`,demo:['','✕',''].map((x,i)=>`<span class="pz-demo-card ${x?'ban':''}" style="--i:${i}">${x||'?'}</span>`).join(''),stats:stat(bps.best,'best streak')+stat(bps.played,'played'),btn:'Start round',act:'data-bp="start"'});
+ if(br.done){const n=br.res.reduce((s,x)=>s+(x==='best'?2:x==='good'?1:0),0);return roundEnd({badge:'Round complete',big:n,unit:`/${BP_N*2}`,sq:br.res.map(sqOf).join(''),text:n>=8?'You spot the weak points right away.':n>=5?'Solid. Look for players with few fallback picks.':'Tip: a player who plays almost only one champion is the best target.',act:'data-bp="start"'});}
  if(!bp)bp=makeBan();
  if(!bp)return'<section class="card empty"><h2>No puzzle found</h2><p>Data is missing right now. Try again later.</p></section>';
  const done=!!bp.answer,maxI=Math.max(...bp.players.flatMap(p=>p.champs.map(c=>c.impact)),0.1);
  const cards=bp.players.map((p,i)=>`<div class="bp-player" style="--i:${i}"><div class="bp-ph"><span class="role-label">${ROLE_LABEL[p.role]}</span><span class="fine">${p.games} games</span></div>${p.champs.map(c=>{const cls=!done?'':c.id===bp.bestId?'best':bp.rank.indexOf(c.id)<=2?'good':'';return`<button class="bp-champ ${cls} ${bp.answer===c.id?'mine':''}" data-bp-pick="${c.id}" ${done?'disabled':''}>${icon(c.id)}<span class="bp-info"><b>${name(c.id)}</b><small>${Math.round(c.share*100)}% of games · ${Math.round(c.wr)}% wins</small>${done?`<span class="bp-bar"><i style="width:${Math.max(3,c.impact/maxI*100)}%"></i></span>`:''}</span>${!done?'<span class="bp-x" aria-hidden="true">✕</span>':''}</button>`;}).join('')}</div>`).join('');
  const b=bp.players.flatMap(p=>p.champs.map(c=>({...c,role:p.role}))).find(c=>c.id===bp.bestId);
- const verdict=done?`<div class="pz-verdict ${bp.pts===2?'best':bp.pts?'good':'bad'}"><strong>${bp.pts===2?'Perfect ban!':bp.pts?'Good ban':'Little impact'}</strong><p> ${name(b.id)} hurts the most: the ${ROLE_LABEL[b.role]} player picks it in ${Math.round(b.share*100)}% of games and wins ${Math.round(b.wr)}%. Without it he drops to about ${Math.round(b.backup)}%.</p><button class="btn primary" data-bp="next">Next team</button></div>`:'<p class="bp-ask">Tap the champion you would ban.</p>';
- return`<section class="card bp-card"><div class="pz-head"><div class="pz-rating"><span class="fine">Streak</span><b>${bps.streak}</b></div><div class="pz-stats"><span><b>${bps.best}</b> best</span><span><b>${bps.points}</b> points</span><span><b>${bps.played}</b> played</span></div></div><div class="bp-intro"><h2>The enemy team</h2><p class="fine">An example team with its recent games. Which ban takes the most away from them?</p></div><div class="bp-grid">${cards}</div>${verdict}</section>`;
+ const verdict=done?`<div class="pz-verdict ${bp.pts===2?'best':bp.pts?'good':'bad'}"><strong>${bp.pts===2?'Perfect ban!':bp.pts?'Good ban':'Little impact'}</strong><p> ${name(b.id)} hurts the most: the ${ROLE_LABEL[b.role]} player picks it in ${Math.round(b.share*100)}% of games and wins ${Math.round(b.wr)}%. Without it he drops to about ${Math.round(b.backup)}%.</p><button class="btn primary" data-bp="next">${br.i+1<BP_N?'Next team':'Result'}</button></div>`:'<p class="bp-ask">Tap the champion you would ban.</p>';
+ return`<section class="card bp-card"><div class="pz-head"><div class="pz-rating"><span class="fine">Streak</span><b>${bps.streak}</b></div><span class="dl-dots pz-dots">${dotsOf(br.res,br.i,BP_N)}</span></div><div class="bp-intro"><h2>The enemy team</h2><p class="fine">An example team with its recent games. Which ban takes the most away from them?</p></div><div class="bp-grid">${cards}</div>${verdict}</section>`;
 }
 
 /* ---------- Macro-Quiz ---------- */
@@ -302,12 +325,11 @@ function offMap(s){
 }
 function macroHtml(){
  if(!scen){fetchData('scenarios');return loading.scenarios==='error'?dataError('scenarios'):spinner;}
- if(!mq)newRound();
- if(!mq)return'';
+ if(!mq)return hero({art:'Nautilus',badge:'Minigame',t1:'Macro',t2:'Quiz',rules:`You see a situation on the map and get three options. The best one scores 2 points, an okay one 1 point. ${ROUND} situations per round, ${scenList().length} in total.`,demo:'<span class="pz-demo-dot b"></span><span class="pz-demo-dot b me"></span><span class="pz-demo-dot obj"></span><span class="pz-demo-dot r"></span>',stats:mqs.best?stat(mqs.best,'Best')+stat(mqs.rounds,'rounds'):'',btn:'Start round',act:'data-mq="again"'});
  const all=scenList();
  if(mq.done){
   const max=ROUND*2;
-  return`<section class="card mq-end"><span class="mg-badge">Round complete</span><h2><b data-countup="0">${mq.points}</b> of ${max} points</h2><p class="fine">${mq.points>=max-1?'Well played, those are high-level decisions.':mq.points>=max/2?'Solid. Have another look at the explanations for the others.':'Read the explanations and the next round will go better.'} Best: ${mqs.best} points.</p><button class="btn primary" data-mq="again">New round</button></section>`;
+  return`<section class="card mq-end"><span class="mg-badge">Round complete</span><h2><b data-countup="0">${mq.points}</b> of ${max} points</h2><p class="fine">${mq.points>=max-1?'Well played, those are high-level decisions.':mq.points>=max/2?'Solid. Have another look at the explanations for the others.':'Read the explanations and the next round will go better.'} Best: ${mqs.best} points.</p><button class="mg-go small" data-mq="again"><span>Play again</span></button></section>`;
  }
  const s=all.find(x=>x.id===mq.ids[mq.i]);if(!s){mq=null;return macroHtml();}
  const dots=mq.ids.map((_,k)=>`<i class="${k<mq.i?'done':k===mq.i?'now':''}"></i>`).join('');
@@ -333,7 +355,7 @@ function nextMacro(){
 /* ---------- Timer-Quiz ---------- */
 // Feste Zeiten: Drache 5 Min. nach dem Tod, Baron 6 Min., Inhibitor 5 Min., Buffs 5 Min.
 // Abklingzeiten der Beschwörerzauber aus Riots Data Dragon (ohne Rabatt durch Runen oder Stiefel).
-const TQ_N=8,TQ_SECS=12;
+const TQ_N=5,TQ_SECS=12;
 const SPELLS=[['Flash',300],['Ignite',180],['Heal',240],['Exhaust',240],['Barrier',180],['Cleanse',240],['Ghost',240]];
 const FIRST=[['Dragon',300],['Voidgrubs',480],['Herald',900],['Baron',1200]];
 const rnd=(a,b)=>a+Math.floor(R()*(b-a+1));
@@ -369,11 +391,11 @@ function answerTimer(val){
  stopTimer();const q=tq.qs[tq.i],left=Math.max(0,tq.deadline-Date.now())/1000;
  tq.answer=val;q.ok=val===q.ans;q.gain=q.ok?Math.round(50+left*10):0;tq.points+=q.gain;if(q.ok){tq.right++;fx='small';}
 }
-function nextTimer(){if(!tq)return;if(tq.i+1<TQ_N){tq.i++;tq.answer=null;tq.deadline=0;}else{tq.done=true;tqs.rounds++;const rec=tq.points>tqs.best;tqs.best=Math.max(tqs.best,tq.points);store(TQ_KEY,tqs);if(rec||tq.right>=7)fx='best';}}
+function nextTimer(){if(!tq)return;if(tq.i+1<TQ_N){tq.i++;tq.answer=null;tq.deadline=0;}else{tq.done=true;tqs.rounds++;const rec=tq.points>tqs.best;tqs.best=Math.max(tqs.best,tq.points);store(TQ_KEY,tqs);if(rec||tq.right>=4)fx='best';}}
 function timerHtml(){
- if(!tq)return`<section class="card tq-card tq-start"><div class="tq-clock big" aria-hidden="true"><span>5:00</span></div><h2>Timer quiz</h2><p class="fine">When is the next dragon? When does the enemy have flash again? ${TQ_N} questions, ${TQ_SECS} seconds each. The faster, the more points.</p><p class="fine">Best: <b>${tqs.best}</b> points</p><button class="btn primary big" data-tq="start">Let's go</button></section>`;
+ if(!tq)return hero({art:'Zilean',badge:'Minigame',t1:'Timer',t2:'Quiz',rules:`When does the dragon respawn? When does the enemy have Flash again? ${TQ_N} questions, ${TQ_SECS} seconds. The faster you are, the more points you get.`,demo:'<div class="tq-clock big"><span>5:00</span></div>',stats:tqs.best?stat(tqs.best,'Best')+stat(tqs.rounds,'rounds'):'',btn:'Let\'s go',act:'data-tq="start"'});
  if(tq.done){
-  return`<section class="card mq-end"><span class="mg-badge">Round complete</span><h2><b data-countup="0">${tq.points}</b> points</h2><p class="fine">${tq.right} of ${TQ_N} correct. Best: ${tqs.best} points.</p><button class="btn primary" data-tq="start">New round</button></section>`;
+  return`<section class="card mq-end"><span class="mg-badge">Round complete</span><h2><b data-countup="0">${tq.points}</b> points</h2><p class="fine">${tq.right} of ${TQ_N} correct. Best: ${tqs.best} points.</p><button class="mg-go small" data-tq="start"><span>Play again</span></button></section>`;
  }
  const q=tq.qs[tq.i],done=tq.answer!=null;
  const dots=tq.qs.map((x,k)=>`<i class="${k<tq.i?(x.ok?'best':'bad'):k===tq.i?'now':''}"></i>`).join('');
@@ -403,21 +425,25 @@ export function afterPuzzle(tab){
   const t0=performance.now(),dur=700;el.textContent=from;
   const step=now=>{const k=Math.min(1,(now-t0)/dur),e=1-(1-k)**3;el.textContent=Math.round(from+(to-from)*e);if(k<1)requestAnimationFrame(step);};requestAnimationFrame(step);
  });
- if(fx){const host=document.querySelector('.pz-verdict.best,.mq-opt.best,.mq-end,.tq-opt.best');if(host)ctx.burst(host,fx==='small'?16:40);fx=null;}
+ if(fx){const host=document.querySelector('.pz-verdict.best,.mq-opt.best,.mq-end,.tq-opt.best,.pz-end');if(host)ctx.burst(host,fx==='small'?16:40);fx=null;}
 }
 export function handlePuzzleClick(el){
  const d=el.dataset;
  if(d.pzPick){answerPuzzle(d.pzPick);ctx.rerender();return true;}
- if(d.pz==='next'){newPuzzle();ctx.rerender();return true;}
- if(d.pzRole){pz.role=d.pzRole;store(PZ_KEY,pz);if(!cp||cp.answer||cp.role!==pz.role)newPuzzle();ctx.rerender();return true;}
+ if(d.pz==='start'){cr={i:0,grades:[],from:pz.rating,done:false};newPuzzle();ctx.rerender();window.scrollTo({top:0,behavior:'smooth'});return true;}
+ if(d.pz==='next'){if(cr&&cr.i+1>=CP_N){cr.done=true;fx=cr.grades.filter(g=>g==='best').length>=7?'best':null;}else{if(cr)cr.i++;newPuzzle();}ctx.rerender();return true;}
+ if(d.pzRole){pz.role=d.pzRole;store(PZ_KEY,pz);ctx.rerender();return true;}
  if(d.dlPick){answerDaily(d.dlPick);ctx.rerender();return true;}
+ if(d.dl==='start'){daily.started=true;daily.shownAt=0;ctx.rerender();return true;}
  if(d.dl==='next'){nextDaily();ctx.rerender();return true;}
  if(d.dl==='submit'){submitDaily();return true;}
  if(d.dl==='share'){navigator.clipboard?.writeText(d.share).then(()=>ctx.toast('Result copied. Paste it into Discord.'),()=>ctx.toast(d.share));return true;}
  if(d.wwPick){answerDuel(d.wwPick);ctx.rerender();return true;}
- if(d.ww==='next'){ww=makeDuel();ctx.rerender();return true;}
+ if(d.ww==='start'){wr={i:0,res:[],done:false};ww=makeDuel();ctx.rerender();return true;}
+ if(d.ww==='next'){if(wr&&wr.i+1>=WW_N){wr.done=true;if(wr.res.filter(x=>x==='best').length>=8)fx='best';}else{if(wr)wr.i++;ww=makeDuel();}ctx.rerender();return true;}
  if(d.bpPick){answerBan(d.bpPick);ctx.rerender();return true;}
- if(d.bp==='next'){bp=makeBan();ctx.rerender();return true;}
+ if(d.bp==='start'){br={i:0,res:[],done:false};bp=makeBan();ctx.rerender();return true;}
+ if(d.bp==='next'){if(br&&br.i+1>=BP_N){br.done=true;if(br.res.filter(x=>x==='best').length>=4)fx='best';}else{if(br)br.i++;bp=makeBan();}ctx.rerender();return true;}
  if(d.mqPick!=null){answerMacro(Number(d.mqPick));ctx.rerender();return true;}
  if(d.mq==='next'){nextMacro();ctx.rerender();window.scrollTo({top:0,behavior:'smooth'});return true;}
  if(d.mq==='again'){newRound();ctx.rerender();return true;}

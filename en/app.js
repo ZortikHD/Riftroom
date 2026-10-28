@@ -5,6 +5,7 @@ const SQUARE=imgPath('sq'),LOADING=imgPath('ld');
 import {ROLES,ROLE_NAMES,OPP_REGIONS,emptyOppPlayers,profileOf,learnRoles,useCatalog,initialState,composition,recommend,metaStatus,validateMeta,validateState,shortPatch} from './engine.js';
 import {poolCheck,banSuggestions,biggestChanges,draftTurn} from './insights.js';
 import {renderMini,mountMini,handleMiniClick,handleMiniInput,handleMiniSubmit} from './minigame.js';
+import {renderPuzzle,handlePuzzleClick} from './puzzles.js';
 import {BIS} from './bis.js';
 import {strengthsWeaknesses,timeline,benchmarks,OBJECTIVES,PLAN_ROLES,PLAN_ROLE_NAMES,roleTimeline} from './gameplan.js';
 import {guide,initGuide,startTour,tourRunning} from './guide.js';
@@ -34,9 +35,17 @@ let practice=null,pendingRemote=null,prSide='blue',prTimer=true,prFearless=false
 // KI-Spielplan je Draft (nur im Speicher dieser Sitzung).
 const planNotes=new Map();
 const isNew=(type,i)=>!!(lastBoard&&state[type][i]&&lastBoard[type][i]!==state[type][i]);
+// Minispiele: Counter-Puzzle, Macro-Quiz und Champion raten. Der zuletzt gewählte Reiter bleibt gemerkt.
+let miniTab='counter';try{const t=localStorage.getItem('riftroom.minitab');if(['counter','macro','guess'].includes(t))miniTab=t;}catch{}
+const MINI_TABS=[['counter','Counter puzzle'],['macro','Macro quiz'],['guess','Guess the champion']];
+const pzCtx={catalog:()=>catalog,esc:v=>esc(v),cname:id=>cname(id),SQUARE,LOADING,rerender:()=>{if(page==='mini')render();}};
+function renderMiniPage(){
+ const tabs=`<div class="subtabs mini-tabs" role="tablist">${MINI_TABS.map(([k,l])=>`<button role="tab" data-minitab="${k}" aria-selected="${miniTab===k}">${l}</button>`).join('')}</div>`;
+ return tabs+(miniTab==='guess'?renderMini(miniCtx):renderPuzzle(miniTab,pzCtx));
+}
 const miniCtx={catalog:()=>catalog,esc:v=>esc(v),portrait:id=>portrait(id,'av'),toast:(m,e)=>toast(m,e),rerender:()=>{if(page==='mini')render();}};
 const MAIN_PAGES={draft:'Draft',team:'Team',opponents:'Opponents',meta:'Meta'};
-const MORE_PAGES={games:'Results',mini:'Minigame',settings:'Data & Backup'};
+const MORE_PAGES={games:'Results',mini:'Mini games',settings:'Data & Backup'};
 const PAGES={...MAIN_PAGES,...MORE_PAGES};
 const META_TABS=[['pool','Your Pool'],['bans','Bans'],['trends','Trends'],['all','All Champions']];
 
@@ -113,13 +122,13 @@ function render(){
  const nav=Object.entries(MAIN_PAGES).map(([k,l])=>`<button class="tab ${page===k?'on':''}" data-page="${k}" ${page===k?'aria-current="page"':''}>${l}${k==='meta'&&newPatch?'<span class="new-dot" title="Neuer Patch"></span>':''}</button>`).join('')
   +`<details class="more"><summary class="tab ${inMore?'on':''}">${inMore?`<span class="more-full">${MORE_PAGES[page]}</span><span class="more-short">More</span>`:'More'}<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5"/></svg></summary><div class="more-menu">${Object.entries(MORE_PAGES).map(([k,l])=>`<button class="more-item ${page===k?'on':''}" data-page="${k}" ${page===k?'aria-current="page"':''}>${l}</button>`).join('')}</div></details>`;
  const chip=st.ok?`<span class="chip ok" title="Win rates from ${esc(m.source)}, as of ${date(m.updatedAt)}"><span class="dot"></span>Patch ${esc(shortPatch(currentPatch()))}${st.fallback?` · Winrates ${esc(shortPatch(m.patch))}`:''}</span>`:`<span class="chip" title="${refreshMessage.startsWith('Offline')?esc(refreshMessage):''}"><span class="dot"></span>${m?esc(st.label):refreshMessage.startsWith('Offline')?'Offline':'No win rates'}</span>`;
- const views={plan:renderPlan,draft:renderDraft,meta:renderMeta,opponents:renderOpponents,team:renderTeam,games:renderGames,mini:()=>renderMini(miniCtx),settings:renderSettings};
+ const views={plan:renderPlan,draft:renderDraft,meta:renderMeta,opponents:renderOpponents,team:renderTeam,games:renderGames,mini:renderMiniPage,settings:renderSettings};
  app.innerHTML=`<header class="top"><div class="top-in"><button class="brand" data-page="draft"><img src="icon.svg" alt="">Riftroom</button><nav class="tabs" aria-label="Main navigation">${nav}</nav><div class="top-right">${chip}${installEvt?`<button class="install-btn" data-action="install" title="Install Riftroom as an app">${icon('download')}<span>App</span></button>`:''}<button class="lang-btn" data-action="lang" title="Auf Deutsch umstellen" aria-label="Language: English. Switch to German">DE</button><button class="help-btn" data-action="tour" title="Show introduction" aria-label="Show introduction">?</button></div></div></header>
  <main class="page ${page!==lastPageRendered?'enter':''}">${bannerHtml()}${roomBarHtml()}<div class="page-body ${room?.role==='viewer'?'viewer':''}" ${viewerLocked()?'inert':''}>${views[page]()}</div></main>
  <footer class="foot"><div class="foot-in">Fan project. Riot Games does not endorse or sponsor this project. <button class="link" data-page="settings">Data sources and legal</button></div></footer>`;
  placeTabInk();decorateEmpty();
  lastPageRendered=page;
- if(page==='mini')mountMini(miniCtx);
+ if(page==='mini'&&miniTab==='guess')mountMini(miniCtx);
  setTimeout(autoTour,350);
 }
 
@@ -1142,6 +1151,8 @@ document.addEventListener('click',e=>{
 /* ---------- Ereignisse ---------- */
 document.addEventListener('click',e=>{
  const el=e.target.closest('button');if(!el||el.disabled)return;
+ if(el.dataset.minitab){miniTab=el.dataset.minitab;try{localStorage.setItem('riftroom.minitab',miniTab);}catch{}render();return;}
+ if(page==='mini'&&miniTab!=='guess'&&handlePuzzleClick(el))return;
  if(handleMiniClick(el))return;
  if(el.dataset.page){page=el.dataset.page;if(page==='meta'&&catalog&&state.meta&&state.seenPatch!==shortPatch(catalog.version)){state.seenPatch=shortPatch(catalog.version);save();}saveUi();render();window.scrollTo({top:0,behavior:'instant'});return;}
  if(el.dataset.metaTab){metaTab=el.dataset.metaTab;saveUi();render();return;}

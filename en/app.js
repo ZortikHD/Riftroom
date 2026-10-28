@@ -22,7 +22,7 @@ if(STANDALONE){
 }
 const calm=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const paths={swap:'M7 4 3 8l4 4 M3 8h14 M17 20l4-4-4-4 M21 16H7',search:'M21 21l-5-5 M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0',close:'m6 6 12 12 M6 18 18 6',plus:'M12 5v14 M5 12h14',spark:'m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z',upload:'M12 16V4 m-5 5 5-5 5 5 M4 16v5h16v-5',download:'M12 3v12 m-5-5 5 5 5-5 M4 16v5h16v-5',chevrondown:'m6 9 6 6 6-6',trash:'M3 6h18 M9 6V3h6v3 M5 6l1 15h12l1-15',map:'M9 4 3 6v14l6-2 6 2 6-2V4l-6 2z M9 4v14 M15 6v14',timer:'M12 8v5l3 2 M9 2h6 M20 13a8 8 0 1 1-16 0 8 8 0 0 1 16 0',copy:'M8 8h12v12H8z M16 8V4H4v12h4',play:'M7 4v16l13-8z',book:'M4 4h10a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4z M8 20a4 4 0 0 1 0-8h10',back:'M15 18l-6-6 6-6',refresh:'M20 7v5h-5 M4 17v-5h5 M6 7a7 7 0 0 1 12-2l2 3 M18 17a7 7 0 0 1-12 2l-2-3'};
+const paths={swap:'M7 4 3 8l4 4 M3 8h14 M17 20l4-4-4-4 M21 16H7',search:'M21 21l-5-5 M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0',close:'m6 6 12 12 M6 18 18 6',plus:'M12 5v14 M5 12h14',spark:'m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z',upload:'M12 16V4 m-5 5 5-5 5 5 M4 16v5h16v-5',download:'M12 3v12 m-5-5 5 5 5-5 M4 16v5h16v-5',chevrondown:'m6 9 6 6 6-6',trash:'M3 6h18 M9 6V3h6v3 M5 6l1 15h12l1-15',map:'M9 4 3 6v14l6-2 6 2 6-2V4l-6 2z M9 4v14 M15 6v14',users:'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M22 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75',timer:'M12 8v5l3 2 M9 2h6 M20 13a8 8 0 1 1-16 0 8 8 0 0 1 16 0',copy:'M8 8h12v12H8z M16 8V4H4v12h4',play:'M7 4v16l13-8z',book:'M4 4h10a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4z M8 20a4 4 0 0 1 0-8h10',back:'M15 18l-6-6 6-6',refresh:'M20 7v5h-5 M4 17v-5h5 M6 7a7 7 0 0 1 12-2l2 3 M18 17a7 7 0 0 1-12 2l-2-3'};
 const icon=(name,cls='')=>`<svg class="icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[name]||paths.spark}"/></svg>`;
 
 let state=initialState(),catalog,page='draft',metaTab='pool',refreshMessage='',toastTimer,pickerTarget=null,pickerRole='ALL',pickerSearch='',metaRole='ALL',metaSearch='',metaSort='adjusted',confirmAction=null,prevMeta=null,backupTimer,selectedOpponent='',analysisText='',analysisBusy=false,analysisCtrl=null,templatesOpen=false,logResult=null;
@@ -57,7 +57,7 @@ const deltaTag=d=>d==null?'<span></span>':`<span class="tag ${d<=-1?'warn':d>=1?
 const head=(title,sub='',actions='')=>`<div class="page-head"><div><h1>${title}</h1>${sub?`<p class="sub">${sub}</p>`:''}</div>${actions?`<div class="head-actions">${actions}</div>`:''}</div>`;
 
 function toast(message,error=false){const t=$('#toast');clearTimeout(toastTimer);t.textContent=message;t.className=`show ${error?'error':''}`;toastTimer=setTimeout(()=>t.className='',error?8000:4000);}
-function save(){if(practice){queueMicrotask(practiceCheck);return;}clearTimeout(backupTimer);backupTimer=setTimeout(pushBackup,3000);try{localStorage.setItem(storageKey,JSON.stringify({...state,catalog:null}));}catch{toast('Browser storage is full or blocked. Back up your team under “Data”.',true);}}
+function save(){if(room?.role==='viewer')return;if(practice){queueMicrotask(practiceCheck);return;}queueRoomPush();clearTimeout(backupTimer);backupTimer=setTimeout(pushBackup,3000);try{localStorage.setItem(storageKey,JSON.stringify({...state,catalog:null}));}catch{toast('Browser storage is full or blocked. Back up your team under “Data”.',true);}}
 function saveUi(){try{localStorage.setItem(uiKey,JSON.stringify({page,metaTab}));}catch{}}
 // Beispiel-Team aus initialState(): Namen "Spieler 01" bis "Spieler 05" (beim Laden geleerte Namen werden zu "Spieler 1" usw.).
 const isExampleTeam=()=>state.players.every((p,i)=>new RegExp('^(Spieler|Player) 0?'+(i+1)+'$').test(p.name));
@@ -115,7 +115,7 @@ function render(){
  const chip=st.ok?`<span class="chip ok" title="Win rates from ${esc(m.source)}, as of ${date(m.updatedAt)}"><span class="dot"></span>Patch ${esc(shortPatch(currentPatch()))}${st.fallback?` · Winrates ${esc(shortPatch(m.patch))}`:''}</span>`:`<span class="chip" title="${refreshMessage.startsWith('Offline')?esc(refreshMessage):''}"><span class="dot"></span>${m?esc(st.label):refreshMessage.startsWith('Offline')?'Offline':'No win rates'}</span>`;
  const views={plan:renderPlan,draft:renderDraft,meta:renderMeta,opponents:renderOpponents,team:renderTeam,games:renderGames,mini:()=>renderMini(miniCtx),settings:renderSettings};
  app.innerHTML=`<header class="top"><div class="top-in"><button class="brand" data-page="draft"><img src="icon.svg" alt="">Riftroom</button><nav class="tabs" aria-label="Main navigation">${nav}</nav><div class="top-right">${chip}${installEvt?`<button class="install-btn" data-action="install" title="Install Riftroom as an app">${icon('download')}<span>App</span></button>`:''}<button class="lang-btn" data-action="lang" title="Auf Deutsch umstellen" aria-label="Language: English. Switch to German">DE</button><button class="help-btn" data-action="tour" title="Show introduction" aria-label="Show introduction">?</button></div></div></header>
- <main class="page ${page!==lastPageRendered?'enter':''}">${bannerHtml()}${views[page]()}</main>
+ <main class="page ${page!==lastPageRendered?'enter':''}">${bannerHtml()}${roomBarHtml()}<div class="page-body" ${viewerLocked()?'inert':''}>${views[page]()}</div></main>
  <footer class="foot"><div class="foot-in">Fan project, not endorsed by Riot Games. <button class="link" data-page="settings">Data sources and legal</button></div></footer>`;
  placeTabInk();decorateEmpty();
  lastPageRendered=page;
@@ -186,6 +186,9 @@ function teamColumn(type,side,tgt,t){
  return`<section class="cs-team side-${side} ${us?'ours':'theirs'}"><div class="cs-team-head"><span class="side-tag ${side}">${esc(us?state.teamName:(activeOpp()?.name||'Opponent'))}</span></div>${rows}</section>`;
 }
 // Vorschläge für den aktuellen Schritt.
+// Kurze Begründung für Pick-Vorschläge, z. B. „passt zum Pool (4/5) · ergänzt Engage“.
+const WHY=new Map([['Frontline','adds frontline'],['Engage','adds engage'],['Magic damage','you lack magic damage'],['Physical damage','you lack physical damage'],['Protects carries','protects your carries'],['Peel vs engage','peel against their engage'],['Scaling vs frontline','scales against their frontline'],['Alternative','solid alternative']]);
+const why=r=>{const m=/(\d)\/5$/.exec(r);return m?`fits the pool (${m[1]}/5)`:WHY.get(r)||r;};
 function stepSuggestions(c,tgt){
  const tk=taken(),byId=new Map(catalog.champions.map(x=>[x.id,x])),st=status(),meta=st.ok?state.meta:null,opp=activeOpp();
  if(c.type==='ban'&&c.who==='us'){
@@ -199,7 +202,7 @@ function stepSuggestions(c,tgt){
   return{title:filled.length?`Ban suggestions for open roles`:'Ban suggestions',items};
  }
  const ri=c.type==='pick'&&pickRole!=null?pickRole:tgt.index;
- if(c.who==='us'){const recs=recommend({...state,selectedRole:ri,poolOnly:false},catalog).slice(0,5);return{title:`Recommended for ${ROLE_NAMES[ROLES[ri]]}`,items:recs.map(r=>({id:r.id,score:r.score,note:r.reasons[0]||''}))};}
+ if(c.who==='us'){const recs=recommend({...state,selectedRole:ri,poolOnly:false},catalog).slice(0,5);return{title:`Recommended for ${ROLE_NAMES[ROLES[ri]]}`,items:recs.map((r,k)=>({id:r.id,score:r.score,top:k<3,note:r.reasons.slice(0,k<3?2:1).map(why).join(' · ')}))};}
  const mains=c.type==='pick'?(opp?.players[ri]?.champs||[]):oppAll(opp);
  const items=mains.filter(id=>!tk.has(id)).map(id=>({id,note:'Main'}));
  return{title:opp?`Typical for ${esc(opp.name)}`:'',items:items.slice(0,5)};
@@ -227,11 +230,12 @@ function roleAdvice(){
 }
 function renderCenter(t,c,tgt,aiTurn){
  if(t.finished)return`<section class="card cs-center cs-done"><div class="cs-done-in">${icon('map','big')}<h2>Draft complete</h2><p class="fine">The game plan shows the map with all champions and short notes for every position.</p><button class="btn primary" data-page="plan">Open game plan</button>${practice?'<button class="btn ghost small" data-action="practice-again">Practice again</button>':''}</div></section>`;
+ if(room?.role==='viewer')return`<section class="card cs-center cs-wait"><div class="cs-done-in"><div class="spinner"></div><p>${c.who==='us'?`${esc(state.teamName)} ${c.type==='ban'?'bans':'picks'} …`:`${esc(state.teamName)} is entering ${c.type==='ban'?'the enemy ban':'the enemy pick'} …`}</p><p class="fine">You're watching live. Every ban and pick appears instantly.</p></div></section>`;
  if(aiTurn)return`<section class="card cs-center cs-wait"><div class="cs-done-in"><div class="spinner"></div><p>The computer ${c.type==='ban'?'bans':'picks'} …</p></div></section>`;
  const sug=stepSuggestions(c,tgt);
  const adv=c.who==='us'&&c.type==='pick'?roleAdvice():[],curRole=pickRole!=null?pickRole:tgt?.index;
  const advHtml=adv.length?`<div class="role-adv"><span class="label">Which role should pick now?</span><div class="role-adv-row">${adv.map((x,k)=>`<button class="ra ${k===0?'best':''} ${x.i===curRole?'on':''}" data-ra="${x.i}" aria-pressed="${x.i===curRole}">${k===0?'<i class="ra-star" aria-hidden="true">★</i>':''}<b>${ROLE_NAMES[ROLES[x.i]]}</b><small>${esc(x.reasons[0])}</small></button>`).join('')}</div></div>`:'';
- const sugHtml=advHtml+(sug.title&&sug.items.length?`<div class="cs-sug"><span class="label">${sug.title}</span><div class="cs-sug-row">${sug.items.map(x=>`<button class="cs-sug-item ${hoverId===x.id?'on':''}" data-hover="${x.id}">${portrait(x.id,'av sm')}<span><b>${esc(cname(x.id))}${c.type==='pick'&&(profileOf(x.id)?.roles.length||0)>1?'<i class="flex-tag" title="Can play several roles">Flex</i>':''}</b><small>${esc(x.note)}</small></span>${x.score!=null?`<span class="mini-score">${x.score}</span>`:''}</button>`).join('')}</div></div>`:'');
+ const sugHtml=advHtml+(sug.title&&sug.items.length?`<div class="cs-sug"><span class="label">${sug.title}</span><div class="cs-sug-row">${sug.items.map(x=>`<button class="cs-sug-item ${hoverId===x.id?'on':''}" data-hover="${x.id}">${portrait(x.id,'av sm')}<span><b>${esc(cname(x.id))}${c.type==='pick'&&(profileOf(x.id)?.roles.length||0)>1?'<i class="flex-tag" title="Can play several roles">Flex</i>':''}</b><small class="${x.top?'why':''}">${esc(x.note)}</small></span>${x.score!=null?`<span class="mini-score">${x.score}</span>`:''}</button>`).join('')}</div></div>`:'');
  const roles=['ALL',...ROLES];
  return`<section class="card cs-center">${sugHtml}<div class="cs-filter"><div class="search">${icon('search')}<input class="field" id="cs-search" placeholder="Search champion" value="${esc(csSearch)}" autocomplete="off" aria-label="Search champion"></div><button class="pool-toggle" data-cs-pool aria-pressed="${csPoolOnly}" title="Only show champions from your pools">Pools only</button><div class="seg cs-roles" role="group" aria-label="Role">${roles.map(r=>`<button data-cs-role="${r}" aria-pressed="${csRole===r}">${r==='ALL'?'All':ROLE_NAMES[r]}</button>`).join('')}</div></div><div class="cs-champs" id="cs-grid">${csGrid()}</div><div class="cs-lock" id="cs-lock">${lockBar()}</div></section>`;
 }
@@ -288,6 +292,7 @@ function lockSplash(id,who,roleIndex){
  host.appendChild(el);setTimeout(()=>el.remove(),1300);
 }
 function lockIn(){
+ if(viewerLocked())return;
  const t=draftTurn(state),c=t.current;if(!c||!hoverId)return;
  if(practice&&c.who!=='us')return;
  let tgt=stepTarget(c);if(!tgt||tgt.index==null||tgt.index<0)return;
@@ -329,11 +334,12 @@ function renderDraftExtras(){
  return`<div class="cs-extras">${compCard}${curve}${analysis}</div>`;
 }
 function renderDraftStart(){
+ if(room?.role==='viewer')return`<section class="card empty room-wait"><h2>Waiting for the draft</h2><p>As soon as ${esc(state.teamName)} starts the draft, you'll see every ban and pick here live.</p></section>`;
  const intro=renderChecklist();
  const ours=[...new Set(state.players.flatMap(p=>p.pool.map(v=>v.id)))].slice(0,12);
  const theirs=[...new Set([...oppAll(activeOpp()),'Ahri','Thresh','LeeSin','Jinx','Darius','Leona','Yasuo','Viego','Kaisa','Orianna','Sett','Lux','Zed','Caitlyn','Graves','Lulu','Jax','Syndra'])].filter(id=>!ours.includes(id)).slice(0,12);
  const tiles=(ids,side)=>`<div class="ds-mosaic ${side}" aria-hidden="true">${ids.map((id,k)=>`<img src="${SQUARE[id]}" alt="" style="--k:${k}" loading="lazy">`).join('')}</div>`;
- return`<section class="ds-hero">${tiles(ours,'blue')}${tiles(theirs,'red')}<div class="ds-side blue"><span>Blue</span></div><div class="ds-mid"><span class="ds-eyebrow">Champ Select · Tournament order</span><h1>Ready to draft?</h1><p>Ban and pick in turns, step by step, with suggestions for every role.</p><button class="btn primary big" data-action="draft-open">${icon('play')}Start draft</button></div><div class="ds-side red"><span>Red</span></div></section>`+intro+renderTemplates();
+ return`<section class="ds-hero">${tiles(ours,'blue')}${tiles(theirs,'red')}<div class="ds-side blue"><span>Blue</span></div><div class="ds-mid"><span class="ds-eyebrow">Champ Select · Tournament order</span><h1>Ready to draft?</h1><p>Ban and pick in turns, step by step, with suggestions for every role.</p><button class="btn primary big" data-action="draft-open">${icon('play')}Start draft</button>${STANDALONE&&!room?`<button class="btn ds-room" data-action="room-open">${icon('users')}Live room for your team</button>`:''}</div><div class="ds-side red"><span>Red</span></div></section>`+intro+renderTemplates();
 }
 // Startliste: was ein neues Team der Reihe nach erledigen sollte. Der erste offene Punkt ist hervorgehoben.
 const EX_POOLS=initialState().players.map(p=>p.pool.map(v=>v.id).join());
@@ -379,7 +385,7 @@ function focusTip(c){
 }
 function autoTour(){
  if(document.getElementById('splash')){setTimeout(autoTour,500);return;}
- if(tourRunning()||document.querySelector('dialog[open]'))return;
+ if(tourRunning()||document.querySelector('dialog[open]')||room)return;
  if(page==='draft'&&draftStarted()){if(!guide.seen('draft')&&document.querySelector('.cs-phase')&&!(practice&&draftTurn(state).current?.who==='them'))startTour('draft');return;}
  if(page==='draft'&&!guide.seen('welcome')){startTour('welcome');return;}
  if(page==='team'&&!guide.seen('team')&&guide.seen('welcome'))startTour('team');
@@ -934,6 +940,127 @@ async function connect(){
  teamRef.onSnapshot(applyRemoteTeam,()=>{});
 }
 
+/* ---------- Live-Raum (nur eigenständige Version) ---------- */
+// Einer bedient den Draft (Host), das Team schaut per Raum-Code live zu. Gespeichert wird nur der Draft-Stand
+// bei Supabase in Frankfurt, ohne Login. Die Bibliothek lädt erst, wenn jemand einen Raum benutzt.
+const SB_URL='https://vupytxgbazwgyhslzaxo.supabase.co',SB_KEY='sb_publishable_gHcNFcK3HK-HgrvshRIKBQ_lxOq3e5a';
+const ROOM_KEYS=['teamName','players','allies','enemies','bans','draftMode','side','draftActive','opponents','opponentId','matchups'];
+let room=null,sbClient=null,roomChannel=null,roomPushTimer=null,roomPoll=null,roomPushing=false,roomDirty=false;
+const viewerLocked=()=>room?.role==='viewer'&&page!=='plan'&&page!=='meta'&&page!=='mini';
+function loadSb(){
+ if(sbClient)return Promise.resolve(sbClient);
+ return new Promise((ok,fail)=>{const el=document.createElement('script');el.src='vendor/supabase.js';el.onload=()=>{try{sbClient=window.supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});ok(sbClient);}catch(e){fail(e);}};el.onerror=()=>fail(Error('load'));document.head.appendChild(el);});
+}
+const roomState=()=>Object.fromEntries(ROOM_KEYS.map(k=>[k,state[k]]));
+const roomLink=()=>{const u=new URL(location.href);u.search='';u.hash='';u.searchParams.set('room',room.code);return u.href;};
+function saveRoomSession(){try{if(room)localStorage.setItem('riftroom.room',JSON.stringify({code:room.code,token:room.token||null}));else localStorage.removeItem('riftroom.room');}catch{}}
+function openRoomDialog(){
+ confirmAction=null;
+ $('#confirm-dialog').innerHTML=`<div class="dlg-head"><div><h2 id="confirm-title">Live room</h2><p class="fine" style="margin-top:4px">One person runs the draft, everyone else sees every ban and pick instantly on their own device. No account needed.</p></div><button class="icon-btn" data-action="cancel-confirm" aria-label="Close">${icon('close')}</button></div>
+ <div class="room-opt"><h3>Create a room</h3><p class="fine">You run the draft. Then send your team the link or the code.</p><button class="btn primary" data-action="room-create">${icon('users')}Create room</button></div>
+ <div class="room-opt"><h3>Join a room</h3><p class="fine">You watch and see your team's draft live.</p><div class="row"><input class="field grow room-code" id="room-code" maxlength="5" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Code, e.g. K7Q2M" aria-label="Room code"><button class="btn" data-action="room-join">Join</button></div></div>
+ <p class="fine">Only the draft state with your player and opponent names is stored, without any login. Rooms are deleted after one day without changes.</p>`;
+ $('#confirm-dialog').showModal();
+}
+async function createRoom(){
+ try{
+  const sb=await loadSb();const {data,error}=await sb.rpc('create_room',{p_state:roomState()});if(error||!data?.[0])throw error||Error('empty');
+  room={code:data[0].code,token:data[0].host_token,role:'host',version:1,viewers:0,status:'connecting'};saveRoomSession();subscribeRoom();
+  $('#confirm-dialog').close();render();copyRoomLink(`Room ${room.code} created. The link is copied, send it to your team.`);
+ }catch{toast('The room couldn\'t be created. Check your internet connection.',true);}
+}
+async function joinRoom(code,token=null){
+ code=String(code||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+ if(code.length!==5){toast('The room code has 5 characters.',true);return;}
+ try{
+  const sb=await loadSb();const {data,error}=await sb.rpc('get_room',{p_code:code});if(error)throw error;
+  if(!data?.[0]){toast('Room not found. It may have expired.',true);if(room?.code===code||!room)forgetRoom();return;}
+  room={code,token,role:token?'host':'viewer',version:0,viewers:0,status:'connecting'};saveRoomSession();
+  if(room.role==='viewer'){page='draft';applyRoom(data[0]);}else room.version=data[0].version;
+  if(document.querySelector('#confirm-dialog[open]'))$('#confirm-dialog').close();
+  subscribeRoom();render();
+  if(room.role==='viewer')toast(`You're watching in room ${code}.`);
+ }catch{toast('Can\'t connect to the room. Check your internet connection.',true);}
+}
+function resumeRoom(){
+ let saved=null;try{saved=JSON.parse(localStorage.getItem('riftroom.room'));}catch{}
+ const fromLink=new URLSearchParams(location.search).get('room');
+ if(fromLink){joinRoom(fromLink,saved&&saved.code===fromLink.toUpperCase()?saved.token:null);return;}
+ if(saved?.code)joinRoom(saved.code,saved.token);
+}
+function applyRoom(row){
+ if(!room||row.version<=room.version)return;
+ const before={allies:[...state.allies],enemies:[...state.enemies]};
+ try{
+  const remote=Object.fromEntries(ROOM_KEYS.filter(k=>k in row.state).map(k=>[k,row.state[k]]));
+  const merged=validateState({...state,meta:null,...remote,version:1},catalog);
+  for(const k of ROOM_KEYS)state[k]=merged[k];
+ }catch{return;}
+ room.version=row.version;
+ if(document.activeElement?.closest?.('.page-body')&&['INPUT','TEXTAREA'].includes(document.activeElement.tagName))return;
+ render();
+ for(const type of ['allies','enemies'])for(let i=0;i<5;i++)if(state[type][i]&&state[type][i]!==before[type][i]){lockSplash(state[type][i],type==='allies'?'us':'them',i);return;}
+}
+async function refreshRoom(){
+ if(room?.role!=='viewer'||!sbClient)return;
+ try{const {data,error}=await sbClient.rpc('get_room',{p_code:room.code});if(error)throw error;
+  if(!data?.[0]){toast('The room has expired.',true);leaveRoom();return;}
+  if(room.status!=='live'&&roomChannel?.state==='joined'){room.status='live';updateRoomBar();}
+  applyRoom(data[0]);
+ }catch{if(room){room.status='offline';updateRoomBar();}}
+}
+function subscribeRoom(){
+ if(!sbClient||!room)return;
+ if(roomChannel)sbClient.removeChannel(roomChannel);
+ const me=Math.random().toString(36).slice(2,10),code=room.code;
+ roomChannel=sbClient.channel('room:'+code,{config:{presence:{key:me}}})
+  .on('broadcast',{event:'changed'},()=>refreshRoom())
+  .on('presence',{event:'sync'},()=>{if(!room||!roomChannel)return;room.viewers=Object.values(roomChannel.presenceState()).filter(v=>v[0]?.role==='viewer').length;updateRoomBar();})
+  .subscribe(status=>{
+   if(!room||room.code!==code)return;
+   if(status==='SUBSCRIBED'){room.status='live';roomChannel.track({role:room.role});if(room.role==='viewer')refreshRoom();else pushRoom();}
+   else if(status==='CHANNEL_ERROR'||status==='TIMED_OUT')room.status='offline';
+   updateRoomBar();
+  });
+ clearInterval(roomPoll);
+ // Sicherheitsnetz, falls das Live-Signal einmal verloren geht.
+ roomPoll=setInterval(()=>{if(room?.role==='viewer'&&!document.hidden)refreshRoom();},10000);
+}
+function queueRoomPush(){if(room?.role!=='host')return;clearTimeout(roomPushTimer);roomPushTimer=setTimeout(pushRoom,120);}
+async function pushRoom(){
+ if(room?.role!=='host'||!sbClient)return;
+ if(roomPushing){roomDirty=true;return;}
+ roomPushing=true;
+ try{const {data,error}=await sbClient.rpc('update_room',{p_code:room.code,p_token:room.token,p_state:roomState()});if(error)throw error;
+  room.version=data;if(room.status!=='live'&&roomChannel?.state==='joined'){room.status='live';updateRoomBar();}}
+ catch(e){if(/not allowed/.test(e?.message||'')){toast('The room has expired. Create a new one if you need it.',true);leaveRoom();}else if(room){room.status='offline';updateRoomBar();}}
+ finally{roomPushing=false;if(roomDirty){roomDirty=false;pushRoom();}}
+}
+function forgetRoom(){
+ if(roomChannel&&sbClient)sbClient.removeChannel(roomChannel);
+ roomChannel=null;clearInterval(roomPoll);clearTimeout(roomPushTimer);room=null;saveRoomSession();
+ const u=new URL(location.href);if(u.searchParams.has('room')){u.searchParams.delete('room');history.replaceState(null,'',u);}
+}
+function leaveRoom(){
+ const wasViewer=room?.role==='viewer';forgetRoom();
+ // Zuschauer haben fremde Daten angezeigt bekommen: eigenen Stand frisch laden.
+ if(wasViewer){location.reload();return;}
+ render();
+}
+async function copyRoomLink(msg){
+ if(!room)return;const link=roomLink();
+ try{await navigator.clipboard.writeText(link);toast(msg||'Link copied. Send it to your team.');}
+ catch{toast(`Room code: ${room.code} · ${link}`);}
+}
+function roomBarHtml(){
+ if(!room)return'';
+ const live=room.status==='live',host=room.role==='host',done=draftStarted()&&draftTurn(state).finished;
+ const who=host?`You're running the draft · ${!room.viewers?'nobody watching yet':room.viewers===1?'1 watching':room.viewers+' watching'}`:'You\'re watching';
+ const state_=room.status==='connecting'?' · connecting …':live?'':' · connection lost';
+ return`<div id="room-bar" class="room-bar ${live?'live':'off'}"><span class="rb-dot" aria-hidden="true"></span><span class="rb-text"><strong>Live room ${room.code}</strong><span>${who}${state_}</span></span><span class="rb-actions">${host?`<button class="btn small" data-action="room-copy">${icon('copy')}Copy link</button>`:done&&page!=='plan'?`<button class="btn small primary" data-page="plan">${icon('map')}Game plan</button>`:''}<button class="btn ghost small" data-action="room-leave">Leave</button></span></div>`;
+}
+function updateRoomBar(){const el=document.getElementById('room-bar');if(el)el.outerHTML=roomBarHtml();}
+
 /* ---------- Ereignisse ---------- */
 document.addEventListener('click',e=>{
  const el=e.target.closest('button');if(!el||el.disabled)return;
@@ -999,6 +1126,11 @@ document.addEventListener('click',e=>{
  if(action==='reset-draft')confirmDialog('Clear draft?','All picks and bans will be removed. Team and champion pools stay.',()=>{endDraft();toast('Ready for a new draft.');});
  if(action==='close-picker')$('#picker').close();
  if(action==='clear-slot'){state[pickerTarget.type][pickerTarget.index]=null;save();$('#picker').close();render();}
+ if(action==='room-open'){openRoomDialog();return;}
+ if(action==='room-create'){createRoom();return;}
+ if(action==='room-join'){joinRoom($('#room-code')?.value);return;}
+ if(action==='room-copy'){copyRoomLink();return;}
+ if(action==='room-leave'){confirmDialog('Leave the room?',room?.role==='host'?'Your team won\'t see new picks after that. The draft stays with you.':'You\'ll see your own data again afterwards.',()=>leaveRoom());return;}
  if(action==='cancel-confirm'){$('#confirm-dialog').close();confirmAction=null;}
  if(action==='confirm'){const fn=confirmAction;confirmAction=null;$('#confirm-dialog').close();fn?.();}
  if(action==='export')showExport();
@@ -1016,7 +1148,7 @@ document.addEventListener('click',e=>{
 document.addEventListener('dblclick',e=>{const el=e.target.closest('[data-hover]');if(el&&!el.disabled){selectHover(el.dataset.hover);lockIn();}});
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&hoverId&&e.target.id!=='cs-search'&&!['TEXTAREA','INPUT','SELECT','BUTTON'].includes(e.target.tagName)&&$('#cs-lock'))lockIn();});
 document.addEventListener('keydown',e=>{
- const s=$('#cs-search');if(!s||tourRunning()||document.querySelector('dialog[open]'))return;
+ const s=$('#cs-search');if(!s||tourRunning()||document.querySelector('dialog[open]')||viewerLocked())return;
  if(e.target===s&&e.key==='Enter'){e.preventDefault();const first=document.querySelector('#cs-grid .champ-btn:not([disabled])');if(!first)return;if(hoverId===first.dataset.hover)lockIn();else selectHover(first.dataset.hover);return;}
  if(e.target===s&&e.key==='Escape'){s.value='';csSearch='';const g=$('#cs-grid');if(g)g.innerHTML=csGrid();return;}
  // Einfach lostippen: Buchstaben landen in der Suche, ohne erst hineinzuklicken.
@@ -1035,9 +1167,11 @@ function init(){
  try{const u=JSON.parse(localStorage.getItem(uiKey));if(u&&PAGES[u.page])page=u.page;if(u&&META_TABS.some(([k])=>k===u.metaTab))metaTab=u.metaTab;}catch{}
  initGuide({page:()=>page,go:k=>{page=k;saveUi();render();window.scrollTo({top:0,behavior:'instant'});},onEnd:()=>{if(page==='draft'&&!draftStarted())render();}});
  render();connect();
+ if(STANDALONE)resumeRoom();
 }
 init();
 
 // Mehr-Menü schließen, wenn außerhalb geklickt oder Escape gedrückt wird.
 document.addEventListener('click',e=>{for(const d of document.querySelectorAll('details.more[open]'))if(!d.contains(e.target))d.open=false;});
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id==='room-code'){e.preventDefault();joinRoom(e.target.value);}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')for(const d of document.querySelectorAll('details.more[open]'))d.open=false;});

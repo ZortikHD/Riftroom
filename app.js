@@ -5,7 +5,7 @@ const SQUARE=imgPath('sq'),LOADING=imgPath('ld');
 import {ROLES,ROLE_NAMES,OPP_REGIONS,emptyOppPlayers,profileOf,learnRoles,useCatalog,initialState,composition,recommend,metaStatus,validateMeta,validateState,shortPatch} from './engine.js';
 import {poolCheck,banSuggestions,biggestChanges,draftTurn} from './insights.js';
 import {renderMini,mountMini,handleMiniClick,handleMiniInput,handleMiniSubmit} from './minigame.js';
-import {renderPuzzle,handlePuzzleClick} from './puzzles.js';
+import {renderPuzzle,handlePuzzleClick,afterPuzzle,miniStats,setMatchups} from './puzzles.js';
 import {BIS} from './bis.js';
 import {strengthsWeaknesses,timeline,benchmarks,OBJECTIVES,PLAN_ROLES,PLAN_ROLE_NAMES,roleTimeline} from './gameplan.js';
 import {guide,initGuide,startTour,tourRunning} from './guide.js';
@@ -35,13 +35,29 @@ let practice=null,pendingRemote=null,prSide='blue',prTimer=true,prFearless=false
 // KI-Spielplan je Draft (nur im Speicher dieser Sitzung).
 const planNotes=new Map();
 const isNew=(type,i)=>!!(lastBoard&&state[type][i]&&lastBoard[type][i]!==state[type][i]);
-// Minispiele: Counter-Puzzle, Macro-Quiz und Champion raten. Der zuletzt gewählte Reiter bleibt gemerkt.
-let miniTab='counter';try{const t=localStorage.getItem('riftroom.minitab');if(['counter','macro','guess'].includes(t))miniTab=t;}catch{}
-const MINI_TABS=[['counter','Counter-Puzzle'],['macro','Macro-Quiz'],['guess','Champion raten']];
-const pzCtx={catalog:()=>catalog,esc:v=>esc(v),cname:id=>cname(id),SQUARE,LOADING,rerender:()=>{if(page==='mini')render();}};
+// Minispiele: Auswahl als Kacheln mit Champion-Bild. Der zuletzt gewählte Reiter bleibt gemerkt.
+const MINI_GAMES=[['counter','Counter-Puzzle','Yasuo','Finde den besten Konter'],['daily','Tägliches Puzzle','Ahri','Für alle gleich, mit Rangliste'],['whowins','Wer gewinnt?','Jinx','Zwei Drafts, ein Favorit'],['ban','Ban-Puzzle','Zed','Welcher Ban tut am meisten weh?'],['macro','Macro-Quiz','Nautilus','Der beste Play auf der Karte'],['timer','Timer-Quiz','Zilean','Respawns und Flash im Kopf'],['guess','Champion raten','Neeko','Buchstabe für Buchstabe']];
+let miniTab='counter';try{const t=localStorage.getItem('riftroom.minitab');if(MINI_GAMES.some(g=>g[0]===t))miniTab=t;}catch{}
+// Rangliste fürs tägliche Puzzle: in Claude über die gemeinsame Datenbank, in der GitHub-Version über Supabase.
+const dailyBoard={
+ async list(date){
+  if(db){const snap=await db.collection('daily/'+date+'/scores').get();return snap.docs.map(d=>d.data()).filter(e=>e&&typeof e.nick==='string'&&isFinite(e.score));}
+  if(STANDALONE){const sb=await loadSb();const {data,error}=await sb.rpc('get_daily',{p_day:date,p_pid:dailyPid()});if(error)throw error;return(data||[]).map(e=>({...e,pid:e.me?dailyPid():''}));}
+  throw Error('offline');
+ },
+ async submit(date,e){
+  const entry={pid:e.pid,nick:String(e.nick).slice(0,24),score:Math.max(0,Math.min(10,e.score|0)),ms:Math.max(0,e.ms|0)};
+  if(db){await db.collection('daily/'+date+'/scores').doc(entry.pid).set(entry);return;}
+  if(STANDALONE){const sb=await loadSb();const {error}=await sb.rpc('submit_daily',{p_day:date,p_pid:entry.pid,p_nick:entry.nick,p_score:entry.score,p_ms:entry.ms});if(error)throw error;return;}
+  throw Error('offline');
+ }
+};
+const dailyPid=()=>{try{return localStorage.getItem('riftroom.pid')||'';}catch{return'';}};
+const pzCtx={catalog:()=>catalog,meta:()=>state.meta,esc:v=>esc(v),cname:id=>cname(id),SQUARE,LOADING,toast:(m,e)=>toast(m,e),burst:(h,n)=>burst(h,n),board:dailyBoard,rerender:()=>{if(page==='mini')render();}};
 function renderMiniPage(){
- const tabs=`<div class="subtabs mini-tabs" role="tablist">${MINI_TABS.map(([k,l])=>`<button role="tab" data-minitab="${k}" aria-selected="${miniTab===k}">${l}</button>`).join('')}</div>`;
- return tabs+(miniTab==='guess'?renderMini(miniCtx):renderPuzzle(miniTab,pzCtx));
+ const st=miniStats();
+ const tiles=`<div class="game-hub" role="tablist" aria-label="Minispiele">${MINI_GAMES.map(([k,l,art,sub],i)=>`<button class="game-tile ${miniTab===k?'on':''}" role="tab" aria-selected="${miniTab===k}" data-minitab="${k}" style="--i:${i}"><img src="${LOADING[art]}" alt=""><span class="gt-text"><b>${l}</b><small>${st[k]?esc(st[k]):sub}</small></span>${k==='daily'&&st.daily!=='Erledigt'?'<i class="gt-new">Neu</i>':''}</button>`).join('')}</div>`;
+ return tiles+(miniTab==='guess'?renderMini(miniCtx):renderPuzzle(miniTab,pzCtx));
 }
 const miniCtx={catalog:()=>catalog,esc:v=>esc(v),portrait:id=>portrait(id,'av'),toast:(m,e)=>toast(m,e),rerender:()=>{if(page==='mini')render();}};
 const MAIN_PAGES={draft:'Draft',team:'Team',opponents:'Gegner',meta:'Meta'};
@@ -129,6 +145,7 @@ function render(){
  placeTabInk();decorateEmpty();
  lastPageRendered=page;
  if(page==='mini'&&miniTab==='guess')mountMini(miniCtx);
+ if(page==='mini'&&miniTab!=='guess')afterPuzzle(miniTab);
  setTimeout(autoTour,350);
 }
 
@@ -962,6 +979,7 @@ async function connect(){
  db.doc('meta/current').onSnapshot(s=>onCurrent(s.exists?s.data():null),()=>{});
  db.doc('meta/previous').onSnapshot(s=>onPrevious(s.exists?s.data():null),()=>{});
  db.doc('meta/bis').onSnapshot(s=>onBis(s.exists?s.data()?.solo:null),()=>{});
+ db.doc('meta/matchups').onSnapshot(s=>{if(s.exists){setMatchups(s.data());if(page==='mini')render();}},()=>{});
  teamRef=db.doc('team/main');
  teamRef.onSnapshot(applyRemoteTeam,()=>{});
 }

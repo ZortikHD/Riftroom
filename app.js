@@ -186,6 +186,7 @@ function render(){
  <main class="page ${page!==lastPageRendered?'enter':''}">${bannerHtml()}${roomBarHtml()}<div class="page-body ${room?.role==='viewer'?'viewer':''}" ${viewerLocked()?'inert':''}>${views[page]()}</div></main>
  <footer class="foot"><div class="foot-in">Fan-Projekt. Riot Games does not endorse or sponsor this project. <button class="link" data-page="settings">Datenquellen und Rechtliches</button></div></footer>`;
  placeTabInk();decorateEmpty();
+ if($('#confirm-dialog').open&&$('#confirm-dialog [data-riot-res]'))riotRepaint();
  lastPageRendered=page;
  if(page==='mini'&&miniTab==='guess')mountMini(miniCtx);
  if(page==='mini'&&miniTab!=='guess'&&miniTab!=='lobby')afterPuzzle(miniTab);
@@ -253,7 +254,7 @@ function teamColumn(type,side,tgt,t){
   const ps=us&&!id&&!t.finished?poolStatus(i):'';
   const attrs=canTarget?`data-cs-target="${type}|${i}"`:t.finished&&!practice?`data-picker="${type}" data-index="${i}"`:'';
   return`<div data-slot="${type}|${i}" class="cs-row ${id?'filled':''} ${act?'active':''} ${isNew(type,i)?'just':''}">${attrs?`<button class="cs-row-btn" ${attrs} aria-label="${us?'Euer':'Gegner'} ${ROLE_NAMES[ROLES[i]]}${id?': '+esc(cname(id)):''}"></button>`:''}${img?`<img class="cs-splash ${prev&&!id?'ghost':''}" src="${LOADING[img]||SQUARE[img]||'icon.svg'}" alt="">`:''}<div class="cs-row-text"><span class="role-label">${ROLE_NAMES[ROLES[i]]}${fx?'?':''}</span><strong>${name||'<span class="muted">—</span>'}</strong>${us?`<span class="fine">${who}</span>`:''}${us?wishChip(i):''}${fx?`<span class="flex-note" title="Kann mehrere Rollen spielen. Erst später sicher, welche."><i class="flex-tag">Flex</i>${fx.map(r=>ROLE_NAMES[r]).join(' / ')}</span>`:''}${ps}</div>${id?`<button class="cs-swap" data-swap="${type}|${i}" title="Rolle tauschen oder Pick ändern" aria-label="${esc(cname(id))}: Rolle tauschen oder Pick ändern">${icon('swap')}</button>`:''}${!us&&id?`<button class="cs-mu ${mu?'has':''}" data-mu-edit="${id}" title="${mu?esc(mu):'Matchup-Notiz zu '+esc(cname(id))}" aria-label="Matchup-Notiz zu ${esc(cname(id))}">${icon('book')}</button>`:''}</div>`;}).join('');
- return`<section class="cs-team side-${side} ${us?'ours':'theirs'}"><div class="cs-team-head"><span class="side-tag ${side}">${esc(us?state.teamName:(activeOpp()?.name||'Gegner'))}</span></div>${rows}</section>`;
+ return`<section class="cs-team side-${side} ${us?'ours':'theirs'}"><div class="cs-team-head"><span class="side-tag ${side}">${esc(us?state.teamName:(activeOpp()?.name||'Gegner'))}</span>${!us&&STANDALONE&&room?.role!=='viewer'&&!practice?scoutBtn():''}</div>${rows}</section>`;
 }
 // Vorschläge für den aktuellen Schritt.
 // Kurze Begründung für Pick-Vorschläge, z. B. „passt zum Pool (4/5) · ergänzt Engage“.
@@ -265,7 +266,7 @@ function stepSuggestions(c,tgt){
   // Nur Rollen bannen, die der Gegner noch nicht sicher besetzt hat. Schwache Mains werden als „kein Ban nötig“ erklärt.
   const info=roleInfo(state.enemies),plan=banList(5);
   const filled=ROLES.filter(r=>info.certain.has(r));
-  return{title:filled.length?`Ban-Vorschläge für offene Rollen`:'Ban-Vorschläge',items:plan.items.map(x=>({id:x.id,note:banNote(x)})),after:skipHtml(plan.skipped)};
+  return{title:filled.length?`Ban-Vorschläge für offene Rollen`:'Ban-Vorschläge',items:plan.items.map(x=>({id:x.id,note:banNote(x)})),after:skipHtml(plan.skipped)+(STANDALONE&&room?.role!=='viewer'&&!practice&&!(activeOpp()?.players.some(p=>validRiotId(p.riotId)))?`<button class="link scout-link" data-action="scout-open">${icon('users')}Riot-IDs der Gegner eintragen, dann passen die Bans genauer</button>`:'')};
  }
  const ri=c.type==='pick'&&pickRole!=null?pickRole:tgt.index;
  if(c.who==='us'){const recs=rec({...state,selectedRole:ri,poolOnly:false}).slice(0,5);return{title:`Empfohlen für ${ROLE_NAMES[ROLES[ri]]}`,items:recs.map((r,k)=>({id:r.id,score:r.score,top:k<3,note:r.reasons.slice(0,k<3?2:1).map(x=>why(x,r)).join(' · ')}))};}
@@ -476,6 +477,18 @@ function openSwapDialog(type,i){
  <div><span class="field-label">Rolle</span><div class="seg wide five" role="group" aria-label="Rolle">${ROLES.map((r,j)=>`<button data-swap-to="${type}|${i}|${j}" aria-pressed="${i===j}">${ROLE_NAMES[r]}${state[type][j]&&j!==i?`<small>${esc(cname(state[type][j]))}</small>`:''}</button>`).join('')}</div><p class="fine" style="margin-top:6px">Steht dort schon ein Champion, tauschen beide die Rollen.</p></div>
  <div class="dlg-actions">${fix?`<button class="btn ghost" data-swap-clear="${type}|${i}">Pick entfernen</button><button class="btn" data-swap-change="${type}|${i}">Anderer Champion</button>`:''}<button class="btn primary" data-action="cancel-confirm">Fertig</button></div>`;
  $('#confirm-dialog').showModal();
+}
+// Gegner scouten direkt im Draft: Riot-IDs eintragen und laden. Die meistgespielten Champions fließen sofort in die Ban-Vorschläge.
+const scoutBtn=()=>{const o=activeOpp(),n=o?o.players.filter(p=>validRiotId(p.riotId)).length:0;return`<button class="btn small cs-scout" data-action="scout-open">${icon('users')}${n?`Riot-IDs (${n}/5)`:'Riot-IDs eintragen'}</button>`;};
+function openScout(){
+ if(!activeOpp()){const o={id:Date.now().toString(36),name:'Gegner',notes:'',favorites:[],region:state.riotRegion||'euw',players:emptyOppPlayers()};state.opponents.push(o);state.opponentId=o.id;save();}
+ const o=activeOpp();selectedOpponent=o.id;confirmAction=null;
+ $('#confirm-dialog').innerHTML=`<div class="dlg-head"><div><h2 id="confirm-title">Gegner scouten</h2><p class="fine" style="margin-top:4px">Riot-IDs eintragen, Riftroom lädt die letzten Spiele. Was sie wirklich spielen, fließt sofort in die Ban-Vorschläge ein.</p></div><button class="icon-btn" data-action="cancel-confirm" aria-label="Schließen">${icon('close')}</button></div>
+ <div class="scout-top"><input class="field grow" id="opp-name" maxlength="40" value="${esc(o.name)}" aria-label="Teamname"><select class="field" id="opp-region" aria-label="Region">${OPP_REGIONS.map(r=>`<option value="${r}" ${o.region===r?'selected':''}>${r.toUpperCase()}</option>`).join('')}</select><button class="btn small" data-riot-all="opp">${icon('refresh')}Alle laden</button></div>
+ <div class="scout-list">${o.players.map((p,i)=>`<div class="opp-player"><span class="role-label">${ROLE_NAMES[ROLES[i]]}</span><input class="field" data-opp-riot="${i}" value="${esc(p.riotId)}" placeholder="Name#EUW" maxlength="40" aria-label="Riot-ID ${ROLE_NAMES[ROLES[i]]}" autocomplete="off" spellcheck="false"><button class="icon-btn" data-riot-load="opp|${i}" aria-label="Laden" title="Laden">${icon('refresh')}</button>${riotBox('opp',i)}</div>`).join('')}</div>
+ <div class="dlg-actions"><button class="btn primary" data-action="cancel-confirm">Fertig</button></div>`;
+ $('#confirm-dialog').showModal();
+ $('#confirm-dialog').addEventListener('close',()=>{if(page==='draft')render();},{once:true});
 }
 function openDraftDialog(){
  confirmAction=null;
@@ -1095,7 +1108,8 @@ async function connect(){
 // Einer bedient den Draft (Host), das Team schaut per Raum-Code live zu. Gespeichert wird nur der Draft-Stand
 // bei Supabase in Frankfurt, ohne Login. Die Bibliothek lädt erst, wenn jemand einen Raum benutzt.
 const SB_URL='https://vupytxgbazwgyhslzaxo.supabase.co',SB_KEY='sb_publishable_gHcNFcK3HK-HgrvshRIKBQ_lxOq3e5a';
-if(STANDALONE)initRiot({url:SB_URL+'/functions/v1/riot',key:SB_KEY,onUpdate:()=>{if(page==='team'||page==='opponents')riotRepaint();}});
+let scoutTimer=null;
+if(STANDALONE)initRiot({url:SB_URL+'/functions/v1/riot',key:SB_KEY,onUpdate:()=>{if(page==='team'||page==='opponents'||$('#confirm-dialog').open)riotRepaint();if(page==='draft'){clearTimeout(scoutTimer);scoutTimer=setTimeout(render,400);}}});
 const ROOM_KEYS=['teamName','players','allies','enemies','bans','draftMode','side','draftActive','opponents','opponentId','matchups','fearless'];
 let room=null,sbClient=null,roomChannel=null,roomPushTimer=null,roomPoll=null,roomPushing=false,roomDirty=false;
 const viewerLocked=()=>room?.role==='viewer'&&!['plan','meta','mini','draft'].includes(page);
@@ -1354,6 +1368,7 @@ document.addEventListener('click',e=>{
  if(action==='room-join'){joinRoom($('#room-code')?.value);return;}
  if(action==='room-copy'){copyRoomLink();return;}
  if(action==='room-leave'){confirmDialog('Raum verlassen?',room?.role==='host'?'Dein Team sieht danach keine neuen Picks mehr. Der Draft bleibt bei dir erhalten.':'Du siehst danach wieder deinen eigenen Stand.',()=>leaveRoom());return;}
+ if(action==='scout-open'){openScout();return;}
  if(action==='cancel-confirm'){$('#confirm-dialog').close();confirmAction=null;}
  if(action==='confirm'){const fn=confirmAction;confirmAction=null;$('#confirm-dialog').close();fn?.();}
  if(action==='export')showExport();

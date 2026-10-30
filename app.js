@@ -402,13 +402,24 @@ function renderDraftExtras(){
  const analysis=STANDALONE?'':`<section class="card"><div class="card-head"><h2>Draft-Analyse</h2><button class="btn small ${analysisBusy?'':'primary'}" data-action="${analysisBusy?'stop-analysis':'analyze'}">${analysisBusy?'Stopp':icon('spark')+'Analysieren'}</button></div><div id="analysis-text" class="analysis">${analysisText?esc(analysisText):'<span class="muted">Claude sagt in wenigen Sätzen, was fehlt und was passt.</span>'}</div></section>`;
  return`<div class="cs-extras">${compCard}${curve}${analysis}</div>`;
 }
+// Draft-Start wie im Champ Select: je fünf Plätze mit großem Splash. Links euer bester Comfort-Pick pro Spieler,
+// rechts die Mains des aktiven Gegners. Fehlt etwas, steht ein typischer Champion der Rolle da (blass), damit keine Seite leer wirkt.
+const DS_FALLBACK={TOP:['Garen','Darius','Ornn','Jax','Sett'],JUNGLE:['LeeSin','Viego','Vi','Graves','JarvanIV'],MIDDLE:['Ahri','Syndra','Yasuo','Orianna','Viktor'],BOTTOM:['Jinx','Kaisa','Caitlyn','Ezreal','Jhin'],UTILITY:['Thresh','Lulu','Leona','Nautilus','Rakan']};
+function dsTeams(){
+ let used=new Set();const st=status();
+ const popular=r=>[...(st.ok?state.meta.entries.filter(e=>e.role===r&&e.games>=10000).sort((a,b)=>(b.pickRate||0)-(a.pickRate||0)).map(e=>e.champion):[]),...DS_FALLBACK[r]].filter(id=>SQUARE[id]);
+ const take=list=>{const id=list.find(x=>SQUARE[x]&&!used.has(x));if(id)used.add(id);return id;};
+ const blue=ROLES.map((r,i)=>{const p=state.players[i],own=take([...p.pool].sort((a,b)=>b.comfort-a.comfort).map(v=>v.id));return{r,id:own||take(popular(r)),name:p.name,sub:own?cname(own):'Pool leer',empty:!own};});
+ const o=activeOpp();used=new Set();// Spiegel-Picks sind erlaubt: Doppelte nur innerhalb einer Seite vermeiden.
+ const red=ROLES.map((r,i)=>{const pl=o?.players[i],main=take(pl?.champs||[]),id=main||take(popular(r)),tag=pl?.riotId?pl.riotId.split('#')[0]:'';return{r,id,name:tag||cname(id),sub:tag?cname(id):'',empty:false};});
+ return{blue,red,oppName:o?.name||'Gegner'};
+}
+const dsSlot=(x,k)=>`<div class="ds-slot${x.empty?' ds-empty':''}" style="--k:${k}"><img src="${LOADING[x.id]||SQUARE[x.id]||'icon.svg'}" alt="" loading="lazy"><div class="ds-slot-text"><span class="role-label">${ROLE_NAMES[x.r]}</span><b>${esc(x.name)}</b>${x.sub?`<small>${esc(x.sub)}</small>`:''}</div></div>`;
 function renderDraftStart(){
  if(room?.role==='viewer')return`<section class="card empty room-wait"><h2>Warte auf den Draft</h2><p>Sobald ${esc(state.teamName)} den Draft startet, siehst du hier jeden Ban und Pick live.</p></section>`;
  const intro=renderChecklist();
- const ours=[...new Set(state.players.flatMap(p=>p.pool.map(v=>v.id)))].slice(0,12);
- const theirs=[...new Set([...oppAll(activeOpp()),'Ahri','Thresh','LeeSin','Jinx','Darius','Leona','Yasuo','Viego','Kaisa','Orianna','Sett','Lux','Zed','Caitlyn','Graves','Lulu','Jax','Syndra'])].filter(id=>!ours.includes(id)).slice(0,12);
- const tiles=(ids,side)=>`<div class="ds-mosaic ${side}" aria-hidden="true">${ids.map((id,k)=>`<img src="${SQUARE[id]}" alt="" style="--k:${k}" loading="lazy">`).join('')}</div>`;
- return`<section class="ds-hero">${tiles(ours,'blue')}${tiles(theirs,'red')}<div class="ds-side blue"><span>Blau</span></div><div class="ds-mid"><span class="ds-eyebrow">Champ Select · Turnier-Reihenfolge</span><h1>Bereit für den Draft?</h1><p>Abwechselnd bannen und picken, Schritt für Schritt, mit Vorschlägen für jede Rolle.</p><button class="btn primary big" data-action="draft-open">${icon('play')}Draft starten</button>${STANDALONE&&!room?`<button class="btn ds-room" data-action="room-open">${icon('users')}Live-Raum fürs Team</button>`:''}</div><div class="ds-side red"><span>Rot</span></div></section>`+intro+renderTemplates();
+ const t=dsTeams();
+ return`<section class="ds-hero"><div class="ds-team blue" aria-label="${esc(state.teamName)}"><div class="ds-team-head"><span class="side-tag blue"><span class="ds-tn">${esc(state.teamName)}</span></span></div>${t.blue.map(dsSlot).join('')}</div><div class="ds-mid"><span class="ds-eyebrow">Champ Select · Turnier-Reihenfolge</span><h1>Bereit für den Draft?</h1><p>Abwechselnd bannen und picken, Schritt für Schritt, mit Vorschlägen für jede Rolle.</p><button class="btn primary big" data-action="draft-open">${icon('play')}Draft starten</button>${STANDALONE&&!room?`<button class="btn ds-room" data-action="room-open">${icon('users')}Live-Raum fürs Team</button>`:''}</div><div class="ds-team red" aria-label="${esc(t.oppName)}"><div class="ds-team-head"><span class="side-tag red"><span class="ds-tn">${esc(t.oppName)}</span></span></div>${t.red.map(dsSlot).join('')}</div></section>`+intro+renderTemplates();
 }
 // Startliste: was ein neues Team der Reihe nach erledigen sollte. Der erste offene Punkt ist hervorgehoben.
 const EX_POOLS=initialState().players.map(p=>p.pool.map(v=>v.id).join());

@@ -100,7 +100,8 @@ export function aiPick(state,meta,taken,opp,catalog,rand=Math.random){
   const list=[];
   for(const i of open){
     const role=ROLES[i],mains=opp?.players?.[i]?.champs||[];
-    for(const id of mains)if(!taken.has(id))list.push({i,id,score:2});
+    // Mains spielt der Computer gern, schwache aber seltener (wie ein echter Gegner, der lieber etwas Starkes nimmt).
+    for(const id of mains)if(!taken.has(id)){const e=meta?.entries.find(x=>x.champion===id&&x.role===role);list.push({i,id,score:e?1.4+(adj(e)-0.5)*20:1.2});}
     if(meta)for(const e of meta.entries)if(e.role===role&&e.games>=10000&&!taken.has(e.champion))list.push({i,id:e.champion,score:(adj(e)-0.5)*20+Math.min(e.pickRate||0,15)/15});
   }
   if(!list.length){for(const i of open)for(const c of catalog.champions)if(!taken.has(c.id)&&profileOf(c.id)?.roles.includes(ROLES[i]))list.push({i,id:c.id,score:rand()});}

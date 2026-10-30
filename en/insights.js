@@ -41,27 +41,82 @@ export function poolCheck(state, cur, prev, catalogById, {drop = 1.0, rise = 1.0
   });
 }
 
-// Ban-Vorschläge: Einfluss = (geglättete Winrate - Durchschnitt) * Pickrate / (100 - Pickrate).
-// Champions aus dem eigenen Pool werden nicht vorgeschlagen.
-export function banSuggestions(state, cur, catalogById, n = 5, favorites = new Set()) {
+// Ban-Vorschläge mit Begründung.
+// Wert ≈ wie viele Prozentpunkte Siegchance uns ein Champion kostet, mal der Chance, dass der Gegner ihn wirklich spielt.
+// Drei Quellen: starke Meta-Champions, die Mains der Gegner und Konter gegen eure Comfort-Picks.
+// Ein Gegner-Main ist nur einen Ban wert, wenn er auch stark ist: im Meta oder nach den eigenen Spielen des Gegners (Riot-Daten).
+// Schwache oder auf der Rolle kaum gespielte Mains landen in „skipped“ und werden als „kein Ban nötig“ angezeigt.
+// opts: {opp, personal: [{map: Map(id -> {n, w}), games}] je Rolle, counters: [{id, vs, wr, role}], info: roleInfo der Gegner-Picks,
+//        relevance(id, role): 0..1 wie relevant ein Ban für noch offene Rollen ist, taken: Set, n}
+export function banPlan(state, meta, catalogById, opts = {}) {
+  const {opp = null, personal = [], counters = [], info = null, relevance = () => 1, taken = new Set(), n = 5} = opts;
   const own = new Set(state.players.flatMap(p => p.pool.map(x => x.id)));
-  const avg = averageWinrate(cur);
-  const main = new Map();
-  for (const e of cur.entries) {
-    const m = main.get(e.champion);
-    if (!m || e.games > m.games) main.set(e.champion, e);
+  const ok = id => catalogById.has(id) && !own.has(id) && !taken.has(id);
+  const avg = meta ? averageWinrate(meta) * 100 : 50;
+  const idx = indexMeta(meta);
+  const at = (id, role) => idx.get(id + '|' + role);
+  const roleOpen = role => !info ? 1 : !info.open.includes(role) ? 0 : info.maybe.has(role) ? 0.5 : 1;
+  const cand = new Map(), skipped = [];
+  const add = (id, role, value, note) => {
+    const c = cand.get(id) || {id, role, parts: []};
+    c.parts.push({value, ...note});
+    if (!c.role) c.role = role;
+    cand.set(id, c);
+  };
+  // 1. Starke Meta-Champions: Vorteil gegenüber dem Durchschnitt mal Pickrate in ihrer Hauptrolle.
+  if (meta) {
+    const main = new Map();
+    for (const e of meta.entries) { const m = main.get(e.champion); if (!m || e.games > m.games) main.set(e.champion, e); }
+    for (const e of main.values()) {
+      if (e.games < 10000 || !ok(e.champion)) continue;
+      const wrA = adj(e) * 100, edge = wrA - avg;
+      if (edge <= 0.3) continue;
+      const prob = Math.min(0.35, (e.pickRate || 0) / 100);
+      add(e.champion, e.role, edge * prob * relevance(e.champion, e.role), {kind: 'meta', wr: wrA});
+    }
   }
-  return [...main.values()]
-    .filter(e => (e.games >= 10000 || favorites.has(e.champion)) && !own.has(e.champion) && catalogById.has(e.champion))
-    .map(e => {
-      const pick = e.pickRate ?? 0;
-      const fav = favorites.has(e.champion);
-      return {id: e.champion, role: e.role, wr: wr(e) * 100, games: e.games, pick: e.pickRate, ban: e.banRate, fav,
-        score: (adj(e) - avg) * 100 * pick / Math.max(1, 100 - pick) + (fav ? 1000 : 0)};
-    })
-    .concat([...favorites].filter(id => !main.has(id) && !own.has(id) && catalogById.has(id))
-      .map(id => ({id, role: null, wr: null, games: 0, pick: null, ban: null, fav: true, score: 999})))
-    .sort((a, b) => b.score - a.score).slice(0, n);
+  // 2. Mains und meistgespielte Champions der Gegner, pro Rolle.
+  if (opp) ROLES.forEach((role, i) => {
+    const rel = roleOpen(role);
+    if (!rel) return;
+    const mains = opp.players[i]?.champs || [], per = personal[i] || null;
+    const ids = new Set(mains);
+    if (per) for (const [id, x] of per.map) if (x.n >= 3) ids.add(id);
+    for (const id of ids) {
+      if (!ok(id)) continue;
+      const e = at(id, role), base = e ? adj(e) * 100 : avg - 1, p = per?.map.get(id);
+      let wrEst, prob;
+      if (p) { wrEst = (p.w * 100 + base * 8) / (p.n + 8); prob = Math.min(0.8, Math.max(0.05, p.n / Math.max(5, per.games))); }
+      else { wrEst = meta ? base + 2 : avg + 3; prob = Math.min(0.4, 0.8 / Math.max(1, mains.length)); }
+      const edge = wrEst - avg;
+      const note = {kind: 'main', role, wr: e ? adj(e) * 100 : null, offmeta: meta ? !e : false, n: p?.n || 0, pw: p ? p.w / p.n * 100 : null};
+      if (meta && edge <= 0.5) { if (mains.includes(id) || (p && p.n >= 5)) skipped.push({id, ...note, edge}); continue; }
+      add(id, role, Math.max(0.05, edge) * prob * rel, note);
+    }
+  });
+  // Team-Favoriten ohne Rolle: wie ein Main mit kleinerer Wahrscheinlichkeit.
+  for (const id of (opp?.favorites || [])) {
+    if (!ok(id) || cand.has(id) || skipped.some(x => x.id === id)) continue;
+    let e = null;
+    if (meta) for (const x of meta.entries) if (x.champion === id && (!e || x.games > e.games)) e = x;
+    const wrEst = e ? adj(e) * 100 + 1 : avg + 2, edge = wrEst - avg;
+    if (meta && edge <= 0.5) { skipped.push({id, kind: 'fav', role: e?.role || null, wr: e ? adj(e) * 100 : null, offmeta: !e, edge}); continue; }
+    add(id, e?.role || null, Math.max(0.05, edge) * 0.2 * (e ? relevance(id, e.role) : 1), {kind: 'fav', wr: e ? adj(e) * 100 : null});
+  }
+  // 3. Konter gegen eure Comfort-Picks auf noch offenen Gegner-Rollen.
+  for (const k of counters) {
+    if (!ok(k.id)) continue;
+    const rel = roleOpen(k.role);
+    if (!rel) continue;
+    add(k.id, k.role, (k.wr - 50) * 0.2 * (k.weight ?? 1) * rel, {kind: 'counter', vs: k.vs, wr: k.wr});
+  }
+  const items = [...cand.values()].map(c => {
+    c.parts.sort((a, b) => b.value - a.value);
+    const value = c.parts[0].value + 0.35 * c.parts.slice(1).reduce((a, x) => a + x.value, 0);
+    return {id: c.id, role: c.role, value, notes: c.parts};
+  }).filter(x => x.value > 0.02).sort((a, b) => b.value - a.value);
+  skipped.sort((a, b) => a.edge - b.edge);
+  return {items: items.slice(0, n), skipped: skipped.filter(x => !items.slice(0, n).some(i => i.id === x.id))};
 }
 
 export function biggestChanges(cur, prev, n = 5, minGames = 5000) {

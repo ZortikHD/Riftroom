@@ -1597,3 +1597,8 @@ html.calm-splash #splash.out{transform:none;filter:none}
 .opp-detail .label-row{flex-wrap:wrap;gap:8px}
 .opp-detail .label-row .row{flex-wrap:wrap;justify-content:flex-end}
 @media(max-width:480px){.opp-player .riot-res{grid-column:1/-1}}
+/* Ban-Begründungen */
+.ban-skip{margin:8px 0 0;font-size:13px}
+.ban-skip b{font-weight:600;color:var(--text)}
+.ban-cell{display:flex;flex-direction:column}
+.ban-why{font-size:12px;color:var(--muted);font-weight:400}

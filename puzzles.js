@@ -52,7 +52,7 @@ const sqOf=g=>g==='best'?'🟩':g==='good'?'🟨':'🟥';
 function fetchData(n){
  if(loading[n])return;loading[n]=true;
  fetch(`data/${n}.json`,{cache:'no-cache'}).then(r=>{if(!r.ok)throw Error();return r.json();})
-  .then(d=>{if(n==='matchups'){if(!mu)mu=d;}else scen=d;ctx?.rerender();})
+  .then(d=>{if(n==='matchups'){if(!mu)mu=d;const f=muWait;muWait=null;f?.();}else scen=d;ctx?.rerender();})
   .catch(()=>{loading[n]='error';ctx?.rerender();});
 }
 const dataError=n=>`<section class="card empty"><h2>Daten nicht erreichbar</h2><p>${n==='matchups'?'Die Matchup-Daten':'Die Situationen'} konnten nicht geladen werden. Prüfe die Internetverbindung.</p></section>`;
@@ -465,6 +465,9 @@ export function mpCard(game,q,answer,gain,left,next){
 export const MP_SECS=TQ_SECS;
 
 /* ---------- Schnittstelle zur App ---------- */
+// Matchup-Winrates für den Draft (Lane-Duelle, Konter-Bans). Lädt die Datei beim ersten Aufruf nach.
+let muWait=null;
+export function getMatchups(onLoad){if(!mu){if(onLoad&&!muWait)muWait=onLoad;if(!loading.matchups)fetchData('matchups');}return mu;}
 export function setMatchups(d){if(d?.roles&&(!mu||d.updatedAt>(mu.updatedAt||'')))mu=d;}
 export function miniStats(){
  const d=load(DAILY_KEY,{}),today=todayKey();

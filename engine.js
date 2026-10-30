@@ -205,11 +205,14 @@ export function validateMeta(value,ids,now=Date.now()){
 }
 export function composition(ids){const p=ids.filter(Boolean).map(id=>profileOf(id)).filter(Boolean);return{count:ids.filter(Boolean).length,known:p.length,front:p.reduce((a,c)=>a+c.front,0),engage:p.reduce((a,c)=>a+c.engage,0),peel:p.reduce((a,c)=>a+c.peel,0),scaling:p.reduce((a,c)=>a+c.scaling,0),physical:p.filter(c=>c.damage==='physical').length,magic:p.filter(c=>c.damage==='magic').length,mixed:p.filter(c=>c.damage==='mixed').length};}
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
-export function recommend(state,catalog,now=Date.now()){
+// mu: Matchup-Winrates (roles[rolle][gegner] = [[champion, winrate gegen gegner, spiele], …]). Ist der Gegner auf dieser Rolle
+// schon gepickt, zählt das Lane-Duell mit. Champions, die auf der Rolle kaum gespielt werden, gelten als Off-Meta.
+export function recommend(state,catalog,now=Date.now(),mu=null){
  const index=state.selectedRole,role=ROLES[index],player=state.players[index];
  const occupied=new Set([...state.allies,...state.enemies,...state.bans,...(state.fearless?.used||[])].filter(Boolean));
  const peers=state.allies.filter((_,i)=>i!==index);const team=composition(peers),enemy=composition(state.enemies);
  const patch=state.targetPatch||catalog.version;const live=metaStatus(state.meta,patch,now).ok;
+ const foe=state.enemies[index]&&state.enemies[index]!=='none'?state.enemies[index]:null,laneRows=foe?mu?.roles?.[role]?.[foe]:null;
  return catalog.champions.filter(c=>!occupied.has(c.id)&&profileOf(c.id)?.roles.includes(role)&&(!state.poolOnly||player.pool.some(p=>p.id===c.id))).map(c=>{
   const p=profileOf(c.id),pool=player.pool.find(x=>x.id===c.id),reasons=[];
   const comfort=pool?20+pool.comfort*16:35;
@@ -220,11 +223,20 @@ export function recommend(state,catalog,now=Date.now()){
   const stat=live?(state.meta.entries.find(s=>s.champion===c.id&&s.role===role)??null):null;
   // Shrink small samples to 50%; strength is a heuristic, never a win probability.
   const adjusted=stat?adj(stat):null;
-  const meta=adjusted===null?null:clamp(50+(adjusted-.5)*400,0,100);
-  const components=[{label:'Champion-Pool',value:comfort,weight:.35},{label:'Teamkomposition',value:fit,weight:.4},...(enemy.known?[{label:'Gegnerprofil',value:response,weight:.15}]:[]),...(meta!==null?[{label:'Meta-Daten',value:meta,weight:.25}]:[])];
-  const total=components.reduce((a,v)=>a+v.weight,0);const raw=components.reduce((a,v)=>a+v.value*v.weight,0)/total;const score=Math.round(raw);
+  let meta=adjusted===null?null:clamp(50+(adjusted-.5)*400,0,100);
+  if(live&&!stat){meta=30;reasons.push('Off-Meta');}
+  // Unter 1 % Pickrate auf der Rolle: Nischen-Pick. Die Winrate ist oft geschönt, weil ihn fast nur Spezialisten spielen.
+  else if(live&&!pool&&(stat.pickRate??1)<1){meta=Math.min(meta,40);reasons.push('Nische');}
+  // Lane-Duell gegen den schon gepickten Gegner (geglättet mit 200 virtuellen Spielen).
+  let lane=null,matchup=null;const lr=laneRows?.find(x=>x[0]===c.id);
+  if(lr&&lr[2]>=300){const a=(lr[1]*lr[2]+50*200)/(lr[2]+200);matchup={foe,wr:a,n:lr[2]};lane=clamp(50+(a-50)*8,0,100);if(a>=51.5)reasons.unshift('Matchup+');else if(a<=48.5)reasons.unshift('Matchup-');}
+  const components=[{label:'Champion-Pool',value:comfort,weight:.35},{label:'Teamkomposition',value:fit,weight:.4},...(enemy.known?[{label:'Gegnerprofil',value:response,weight:.15}]:[]),...(meta!==null?[{label:'Meta-Daten',value:meta,weight:.25}]:[]),...(lane!==null?[{label:'Lane-Duell',value:lane,weight:.3}]:[])];
+  const total=components.reduce((a,v)=>a+v.weight,0);let raw=components.reduce((a,v)=>a+v.value*v.weight,0)/total;
+  // Off-Meta- und Nischen-Picks außerhalb des Pools nur, wenn sonst wirklich alles passt.
+  if(!pool&&reasons.includes('Off-Meta'))raw*=0.85;else if(!pool&&reasons.includes('Nische'))raw*=0.9;
+  const score=Math.round(raw);
   if(pool)reasons.unshift(`Pool ${pool.comfort}/5`);if(!reasons.length)reasons.push('Alternative');
-  return {...c,score,raw,adjusted,reasons:reasons.slice(0,3),components,stat,profile:p};
+  return {...c,score,raw,adjusted,reasons:reasons.slice(0,3),components,stat,profile:p,matchup};
  }).sort((a,b)=>b.raw-a.raw||(b.adjusted??0)-(a.adjusted??0)||a.name.localeCompare(b.name,'de'));
 }
 export function validateState(s,catalog){

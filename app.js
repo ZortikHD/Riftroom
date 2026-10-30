@@ -3,9 +3,9 @@ import BUNDLED_CATALOG from './catalog.js';
 const imgPath=dir=>new Proxy({},{get:(_,id)=>typeof id==='string'&&/^[A-Za-z0-9]+$/.test(id)?`img/${dir}/${id}.webp`:undefined});
 const SQUARE=imgPath('sq'),LOADING=imgPath('ld');
 import {ROLES,ROLE_NAMES,OPP_REGIONS,emptyOppPlayers,profileOf,learnRoles,useCatalog,initialState,composition,recommend,metaStatus,validateMeta,validateState,shortPatch} from './engine.js';
-import {poolCheck,banSuggestions,biggestChanges,draftTurn} from './insights.js';
+import {poolCheck,banPlan,biggestChanges,draftTurn} from './insights.js';
 import {renderMini,mountMini,handleMiniClick,handleMiniInput,handleMiniSubmit} from './minigame.js';
-import {renderPuzzle,handlePuzzleClick,afterPuzzle,miniStats,setMatchups} from './puzzles.js';
+import {renderPuzzle,handlePuzzleClick,afterPuzzle,miniStats,setMatchups,getMatchups} from './puzzles.js';
 import {renderLobby,afterLobby,handleLobbyClick,handleLobbyInput,openLobbyLink,lobbyInfo} from './lobby.js';
 import {setSupabase} from './live.js';
 import {initRiot,riotLoad,riotState,riotSummary,comfortFromGames,validRiotId} from './riot.js';
@@ -105,6 +105,43 @@ const favSet=()=>new Set(oppAll(activeOpp()));
 const opggMulti=o=>{const ids=o.players.map(p=>p.riotId).filter(r=>r.includes('#'));return ids.length?`https://op.gg/lol/multisearch/${o.region}?summoners=${ids.map(encodeURIComponent).join(',')}`:'';};
 const opggProfile=(o,riotId)=>{const i=riotId.lastIndexOf('#');return`https://op.gg/lol/summoners/${o.region}/${encodeURIComponent(riotId.slice(0,i).trim())}-${encodeURIComponent(riotId.slice(i+1).trim())}`;};
 const metaFor=(id,role)=>state.meta?.entries.find(e=>e.champion===id&&e.role===role);
+// Empfehlungen mit Lane-Duell: Matchup-Winrates kommen aus denselben Daten wie das Counter-Puzzle.
+const muLoaded=()=>{if(page==='draft'||page==='plan'||page==='meta')render();};
+const rec=st=>recommend(st,catalog,Date.now(),getMatchups(muLoaded));
+// Riot-Daten der Gegner (falls geladen): pro Rolle die Champions, die der Spieler dort wirklich spielt.
+function oppPersonal(opp){
+ if(!opp||!STANDALONE)return[];
+ return opp.players.map((p,i)=>{const st=validRiotId(p.riotId)?riotState(opp.region||'euw',p.riotId):null;if(!st?.data)return null;const s=riotSummary(st.data,ROLES[i],catalog);return{map:new Map(s.inRole.map(c=>[c.id,{n:c.n,w:c.w}])),games:s.roleGames};});
+}
+// Konter gegen eure Comfort-Picks (Sicherheit 4–5) oder den schon gepickten Champion, aus den Matchup-Winrates.
+function poolCounters(tk){
+ const m=getMatchups(muLoaded);if(!m?.roles)return[];
+ const out=[];
+ state.players.forEach((p,i)=>{
+  // Hat ein Spieler mehrere Comfort-Picks, lohnt ein Konter-Ban weniger (er weicht einfach aus). Pro Champion höchstens zwei Konter.
+  const r=ROLES[i],mine=state.allies[i]?[{id:state.allies[i],comfort:5}]:[...p.pool].filter(v=>v.comfort>=4&&!tk.has(v.id)).sort((a,b)=>b.comfort-a.comfort).slice(0,3);
+  for(const v of mine){
+   const rows=(m.roles[r]?.[v.id]||[]).filter(x=>x[2]>=400).map(([o,w,n])=>({id:o,wr:(w*n+50*200)/(n+200)})).filter(x=>x.wr>=52.5).sort((a,b)=>b.wr-a.wr).slice(0,2);
+   for(const x of rows)out.push({id:x.id,vs:v.id,wr:x.wr,role:r,weight:v.comfort/5/mine.length*(state.allies[i]?1:0.6)});
+  }
+ });
+ return out;
+}
+function banList(n=5,forDraft=true){
+ const st=status(),meta=st.ok?state.meta:null,opp=activeOpp(),tk=forDraft?taken():new Set(),info=forDraft?roleInfo(state.enemies):null;
+ return banPlan(state,meta,new Map(catalog.champions.map(x=>[x.id,x])),{opp,personal:oppPersonal(opp),counters:forDraft?poolCounters(tk):[],info,relevance:(id,role)=>info?banValue(id,info,state.meta):1,taken:tk,n});
+}
+function banWhy(x){
+ if(x.kind==='main')return x.n?`${ROLE_NAMES[x.role]}-Main · ${x.n} ${x.n===1?'Spiel':'Spiele'}, ${Math.round(x.pw)} %`:`${ROLE_NAMES[x.role]}-Main${x.wr!=null?' · '+pct(x.wr):''}`;
+ if(x.kind==='fav')return`Team-Favorit${x.wr!=null?' · '+pct(x.wr):''}`;
+ if(x.kind==='counter')return`Konter gegen ${cname(x.vs)} (${pct(x.wr)})`;
+ return`Stark im Meta · ${pct(x.wr)}`;
+}
+// Ist ein Champion schon als Main begründet, ist „stark im Meta“ doppelt: dann weglassen.
+const banNote=b=>{const own=b.notes.some(x=>x.kind==='main'||x.kind==='fav');return[...new Set(b.notes.filter(x=>!(own&&x.kind==='meta')).slice(0,2).map(banWhy))].join(' · ');};
+// „Kein Ban nötig“: Gegner-Mains, die gerade schwach sind oder vom Spieler selbst kaum gewonnen werden.
+const skipWhy=x=>x.n>=5?`${x.n} Spiele, nur ${Math.round(x.pw)} % Siege`:x.offmeta?(x.role?`auf ${ROLE_NAMES[x.role]} kaum gespielt`:'kaum gespielt'):`gerade schwach, ${pct(x.wr)}`;
+const skipHtml=sk=>sk.length?`<p class="fine ban-skip">Kein Ban nötig: ${sk.slice(0,3).map(x=>`<b>${esc(cname(x.id))}</b> (${skipWhy(x)})`).join(', ')}.</p>`:'';
 const selOpp=()=>state.opponents.find(o=>o.id===selectedOpponent)||state.opponents[0]||null;
 const taken=()=>new Set([...state.allies,...state.enemies,...state.bans,...(state.fearless?.used||[])].filter(Boolean));
 
@@ -221,21 +258,17 @@ function teamColumn(type,side,tgt,t){
 // Vorschläge für den aktuellen Schritt.
 // Kurze Begründung für Pick-Vorschläge, z. B. „passt zum Pool (4/5) · ergänzt Engage“.
 const WHY=new Map([['Frontline','bringt Frontline'],['Engage','ergänzt Engage'],['Magischer Schaden','es fehlt magischer Schaden'],['Physischer Schaden','es fehlt physischer Schaden'],['Schützt Carries','schützt eure Carries'],['Peel gegen Engage','Peel gegen ihren Engage'],['Scaling gegen Frontline','skaliert gegen ihre Frontline'],['Alternative','solide Alternative']]);
-const why=r=>{const m=/(\d)\/5$/.exec(r);return m?`passt zum Pool (${m[1]}/5)`:WHY.get(r)||r;};
+const why=(x,r)=>{const m=/(\d)\/5$/.exec(x);if(m)return`passt zum Pool (${m[1]}/5)`;if(x==='Matchup+'&&r?.matchup)return`gewinnt die Lane gegen ${cname(r.matchup.foe)} (${pct(r.matchup.wr)})`;if(x==='Matchup-'&&r?.matchup)return`schwer gegen ${cname(r.matchup.foe)} (${pct(r.matchup.wr)})`;if(x==='Off-Meta')return'auf dieser Rolle kaum gespielt';if(x==='Nische')return'auf dieser Rolle selten gespielt';return WHY.get(x)||x;};
 function stepSuggestions(c,tgt){
  const tk=taken(),byId=new Map(catalog.champions.map(x=>[x.id,x])),st=status(),meta=st.ok?state.meta:null,opp=activeOpp();
  if(c.type==='ban'&&c.who==='us'){
-  // Nur Rollen bannen, die der Gegner noch nicht sicher besetzt hat. "Vielleicht besetzt" (Flex) rutscht nach hinten.
-  const info=roleInfo(state.enemies),anyPick=state.enemies.some(Boolean);
-  const pool=meta?banSuggestions(state,meta,byId,60,favSet()).filter(b=>!tk.has(b.id)).map(b=>({id:b.id,fav:b.fav,wr:b.wr})):oppAll(opp).filter(id=>!tk.has(id)).map(id=>({id,fav:true,wr:null}));
-  // Wert = wie oft der Champion in einer noch offenen Gegner-Rolle gespielt wird. Unter 35 % fällt er raus.
-  const items=pool.map((x,k)=>({...x,k,v:banValue(x.id,info,state.meta)})).filter(x=>x.v>=0.35).sort((a,b)=>(a.k+(1-a.v)*8)-(b.k+(1-b.v)*8)).slice(0,5)
-   .map(x=>{const r=banRole(x.id,info,state.meta);return{id:x.id,note:[x.fav?'Gegner-Main':'',anyPick&&r?ROLE_NAMES[r]:'',x.wr!=null?pct(x.wr):''].filter(Boolean).join(' · ')};});
+  // Nur Rollen bannen, die der Gegner noch nicht sicher besetzt hat. Schwache Mains werden als „kein Ban nötig“ erklärt.
+  const info=roleInfo(state.enemies),plan=banList(5);
   const filled=ROLES.filter(r=>info.certain.has(r));
-  return{title:filled.length?`Ban-Vorschläge für offene Rollen`:'Ban-Vorschläge',items};
+  return{title:filled.length?`Ban-Vorschläge für offene Rollen`:'Ban-Vorschläge',items:plan.items.map(x=>({id:x.id,note:banNote(x)})),after:skipHtml(plan.skipped)};
  }
  const ri=c.type==='pick'&&pickRole!=null?pickRole:tgt.index;
- if(c.who==='us'){const recs=recommend({...state,selectedRole:ri,poolOnly:false},catalog).slice(0,5);return{title:`Empfohlen für ${ROLE_NAMES[ROLES[ri]]}`,items:recs.map((r,k)=>({id:r.id,score:r.score,top:k<3,note:r.reasons.slice(0,k<3?2:1).map(why).join(' · ')}))};}
+ if(c.who==='us'){const recs=rec({...state,selectedRole:ri,poolOnly:false}).slice(0,5);return{title:`Empfohlen für ${ROLE_NAMES[ROLES[ri]]}`,items:recs.map((r,k)=>({id:r.id,score:r.score,top:k<3,note:r.reasons.slice(0,k<3?2:1).map(x=>why(x,r)).join(' · ')}))};}
  const mains=c.type==='pick'?(opp?.players[ri]?.champs||[]):oppAll(opp);
  const items=mains.filter(id=>!tk.has(id)).map(id=>({id,note:'Main'}));
  return{title:opp?`Typisch für ${esc(opp.name)}`:'',items:items.slice(0,5)};
@@ -255,7 +288,7 @@ function roleAdvice(){
   else if(pool.length&&free===2){score+=1;reasons.push('Pool wird knapp: 2 frei');}
   const blindLate=!enemy.certain.has(r)&&picksDone<3&&BLIND[r]<1;
   if(!enemy.certain.has(r)&&picksDone<3){score+=BLIND[r];if(BLIND[r]>=1)reasons.push('Sicherer Blind-Pick');}
-  const best=recommend({...state,selectedRole:i,poolOnly:false},catalog)[0];
+  const best=rec({...state,selectedRole:i,poolOnly:false})[0];
   if(best&&best.score>=75){score+=1;reasons.push(`Starker Pick frei: ${cname(best.id)}`);}
   if(!reasons.length)reasons.push(blindLate?'Lieber später, sonst leicht zu kontern':'Offen');
   return{i,score,reasons};
@@ -268,7 +301,7 @@ function renderCenter(t,c,tgt,aiTurn){
  const sug=stepSuggestions(c,tgt);
  const adv=c.who==='us'&&c.type==='pick'?roleAdvice():[],curRole=pickRole!=null?pickRole:tgt?.index;
  const advHtml=adv.length?`<div class="role-adv"><span class="label">Welche Rolle jetzt picken?</span><div class="role-adv-row">${adv.map((x,k)=>`<button class="ra ${k===0?'best':''} ${x.i===curRole?'on':''}" data-ra="${x.i}" aria-pressed="${x.i===curRole}">${k===0?'<i class="ra-star" aria-hidden="true">★</i>':''}<b>${ROLE_NAMES[ROLES[x.i]]}</b><small>${esc(x.reasons[0])}</small></button>`).join('')}</div></div>`:'';
- const sugHtml=`<div id="team-wish">${teamWishHtml(c)}</div>`+advHtml+(sug.title&&sug.items.length?`<div class="cs-sug"><span class="label">${sug.title}</span><div class="cs-sug-row">${sug.items.map(x=>`<button class="cs-sug-item ${hoverId===x.id?'on':''}" data-hover="${x.id}">${portrait(x.id,'av sm')}<span><b>${esc(cname(x.id))}${c.type==='pick'&&(profileOf(x.id)?.roles.length||0)>1?'<i class="flex-tag" title="Kann mehrere Rollen spielen">Flex</i>':''}</b><small class="${x.top?'why':''}">${esc(x.note)}</small></span>${x.score!=null?`<span class="mini-score">${x.score}</span>`:''}</button>`).join('')}</div></div>`:'');
+ const sugHtml=`<div id="team-wish">${teamWishHtml(c)}</div>`+advHtml+(sug.title&&sug.items.length?`<div class="cs-sug"><span class="label">${sug.title}</span><div class="cs-sug-row">${sug.items.map(x=>`<button class="cs-sug-item ${hoverId===x.id?'on':''}" data-hover="${x.id}" title="${esc(x.note)}">${portrait(x.id,'av sm')}<span><b>${esc(cname(x.id))}${c.type==='pick'&&(profileOf(x.id)?.roles.length||0)>1?'<i class="flex-tag" title="Kann mehrere Rollen spielen">Flex</i>':''}</b><small class="${x.top?'why':''}">${esc(x.note)}</small></span>${x.score!=null?`<span class="mini-score">${x.score}</span>`:''}</button>`).join('')}</div>${sug.after||''}</div>`:'');
  const roles=['ALL',...ROLES];
  return`<section class="card cs-center">${sugHtml}<div class="cs-filter"><div class="search">${icon('search')}<input class="field" id="cs-search" placeholder="Champion suchen" value="${esc(csSearch)}" autocomplete="off" aria-label="Champion suchen"></div><button class="pool-toggle" data-cs-pool aria-pressed="${csPoolOnly}" title="Nur Champions aus euren Pools zeigen">Nur Pools</button><div class="seg cs-roles" role="group" aria-label="Rolle">${roles.map(r=>`<button data-cs-role="${r}" aria-pressed="${csRole===r}">${r==='ALL'?'Alle':ROLE_NAMES[r]}</button>`).join('')}</div></div><div class="cs-champs" id="cs-grid">${csGrid()}</div><div class="cs-lock" id="cs-lock">${lockBar()}</div></section>`;
 }
@@ -290,7 +323,7 @@ function lockBar(){
  const roleSel=isPick?`<div class="pick-roles"><span class="fine">${c.who==='us'?'Für welche Rolle?':'Welche Rolle?'}</span><div class="seg" role="group" aria-label="Rolle für diesen Pick">${openSlots(type).map(i=>`<button data-pick-role="${i}" aria-pressed="${pr===i}">${ROLE_NAMES[ROLES[i]]}</button>`).join('')}</div></div>`:'';
  let info='';
  const pf=profileOf(hoverId),flex=pf&&pf.roles.length>1?`Flex: ${pf.roles.map(r=>ROLE_NAMES[r]).join('/')}`:'';
- if(c.who==='us'&&c.type==='pick'){const pa=previewAllies(),a0=composition(state.allies),a1=pa?composition(pa):a0,gains=[['front','Frontline'],['engage','Engage'],['peel','Peel']].filter(([k])=>a1[k]>a0[k]).map(([k,l])=>`${l} +${a1[k]-a0[k]}`),r=recommend({...state,selectedRole:pr,poolOnly:false},catalog).find(x=>x.id===hoverId);info=[r?`Passung ${r.score}`:'',r?.stat?`${pct(r.stat.wins/r.stat.games*100)} WR`:'',...gains,flex].filter(Boolean).join(' · ');}
+ if(c.who==='us'&&c.type==='pick'){const pa=previewAllies(),a0=composition(state.allies),a1=pa?composition(pa):a0,gains=[['front','Frontline'],['engage','Engage'],['peel','Peel']].filter(([k])=>a1[k]>a0[k]).map(([k,l])=>`${l} +${a1[k]-a0[k]}`),r=rec({...state,selectedRole:pr,poolOnly:false}).find(x=>x.id===hoverId);info=[r?`Passung ${r.score}`:'',r?.stat?`${pct(r.stat.wins/r.stat.games*100)} WR`:'',r?.matchup?`${pct(r.matchup.wr)} gegen ${cname(r.matchup.foe)}`:'',...gains,flex].filter(Boolean).join(' · ');}
  else if(state.meta){const e=state.meta.entries.filter(x=>x.champion===hoverId).sort((a,b)=>b.games-a.games)[0];if(e)info=`${pct(e.wins/e.games*100)} WR · ${ROLE_NAMES[e.role]}${e.banRate!=null?` · Banrate ${pct(e.banRate)}`:''}`;}
  if(!info&&flex)info=flex;
  const v2=isPick?`${verb} als ${ROLE_NAMES[ROLES[pr]]}`:verb;
@@ -588,7 +621,7 @@ function buildPlanPrompt(){
  L.push('{"winCondition":"ein Satz","roles":[{"role":"TOP","wichtig":["…","…"],"plan":["…","…"],"wann":["6:00 – …","14:00 – …"]},{"role":"JUNGLE","wichtig":[],"plan":[]},{"role":"MIDDLE","wichtig":[],"plan":[]},{"role":"BOTTOM","wichtig":[],"plan":[]},{"role":"UTILITY","wichtig":[],"plan":[]}]}');
  L.push('Regeln: Deutsch. Je Rolle genau 2 Punkte unter "wichtig" und genau 2 unter "plan", jeder Punkt höchstens 9 Wörter, im Telegrammstil ohne Füllwörter. "wichtig" = was der Spieler über sein Matchup und die gegnerischen Champions wissen muss (Power-Spikes, gefährliche Fähigkeiten, Level-Vorteile). "plan" = was er konkret tun soll (Wellen, Trades, Roams, Objectives, Rolle im Teamfight). Für den Jungle geht es um Pathing, Gank-Ziele und Objectives. "wann" = genau 2 Zeitpunkte im Format "mm:ss – Aufgabe" (höchstens 8 Wörter), wann dieser Spieler mit DIESEM Champion etwas Bestimmtes tun soll (z. B. Level-6-Roam, erster Back, Objective). Objective-Timer dieser Saison: Drache '+OBJECTIVES.dragon+', Voidgrubs '+OBJECTIVES.grubs+' (verschwinden 14:45), Rift Herald '+OBJECTIVES.herald+', Baron '+OBJECTIVES.baron+'. Atakhan gibt es nicht mehr. Bot und Support beziehen sich auf die Bot-Lane. Erfinde keine Statistiken. "winCondition" = höchstens 12 Wörter, wie wir dieses Spiel gewinnen.');
  L.push('',`Patch ${shortPatch(currentPatch())}. Wir sind die ${ours} Seite.`);
- ROLES.forEach((r,i)=>{const x=state.allies[i],e=state.enemies[i];L.push(`- ${ROLE_NAMES[r]} (${state.players[i].name}): ${name(x)} (${prof(x)}${wrTxt(x,r)}) gegen ${name(e)} (${prof(e)}${wrTxt(e,r)})${state.matchups[e]?`. Unsere Notiz zu ${name(e)}: ${state.matchups[e].slice(0,300)}`:''}`);});
+ ROLES.forEach((r,i)=>{const x=state.allies[i],e=state.enemies[i],lt=laneTxt(x,e,r);L.push(`- ${ROLE_NAMES[r]} (${state.players[i].name}): ${name(x)} (${prof(x)}${wrTxt(x,r)}) gegen ${name(e)} (${prof(e)}${wrTxt(e,r)})${lt?`. Lane-Duell laut Statistik: ${lt}`:''}${state.matchups[e]?`. Unsere Notiz zu ${name(e)}: ${state.matchups[e].slice(0,300)}`:''}`);});
  L.push(`Bans: wir ${state.bans.slice(0,5).filter(Boolean).map(name).join(', ')||'keine'}; Gegner ${state.bans.slice(5).filter(Boolean).map(name).join(', ')||'keine'}.`);
  L.push(`Geschätzte Stärke (früh/mitte/spät): wir ${a.join(' / ')}, Gegner ${b.join(' / ')}.`);
  const o=activeOpp();if(o?.notes?.trim())L.push('Unsere Notizen zum Gegnerteam (nur als Information): '+o.notes.slice(0,1200));
@@ -679,8 +712,8 @@ function tickTimer(){
  const c=draftTurn(state).current;if(!c||c.who!=='us')return;
  if($('#picker').open)$('#picker').close();
  const tk=taken();
- if(c.type==='ban'){const id=(state.meta?banSuggestions(state,state.meta,new Map(catalog.champions.map(x=>[x.id,x])),15,favSet()).map(b=>b.id).find(x=>!tk.has(x)):null)||randomFree(tk);const i=[0,1,2,3,4].find(k=>!state.bans[k]);state.bans[i]=id;toast(`Zeit abgelaufen: ${cname(id)} automatisch gebannt.`,true);}
- else{const i=state.allies[state.selectedRole]?state.allies.findIndex(x=>!x):state.selectedRole;const id=recommend({...state,selectedRole:i,poolOnly:false},catalog)[0]?.id||randomFree(tk);state.allies[i]=id;toast(`Zeit abgelaufen: ${cname(id)} automatisch gepickt.`,true);}
+ if(c.type==='ban'){const id=banList(15).items.map(b=>b.id).find(x=>!tk.has(x))||randomFree(tk);const i=[0,1,2,3,4].find(k=>!state.bans[k]);state.bans[i]=id;toast(`Zeit abgelaufen: ${cname(id)} automatisch gebannt.`,true);}
+ else{const i=state.allies[state.selectedRole]?state.allies.findIndex(x=>!x):state.selectedRole;const id=rec({...state,selectedRole:i,poolOnly:false})[0]?.id||randomFree(tk);state.allies[i]=id;toast(`Zeit abgelaufen: ${cname(id)} automatisch gepickt.`,true);}
  save();render();
 }
 function endPractice(){
@@ -705,6 +738,8 @@ function practiceBlocks(type,index){
 }
 
 /* ---------- Analyse (Claude) ---------- */
+// Lane-Duell laut Statistik als Text, z. B. „Garen gewinnt 52,1 % gegen Darius (4.123 Spiele)“.
+function laneTxt(x,e,r){const row=x&&e?getMatchups()?.roles?.[r]?.[e]?.find(z=>z[0]===x):null;if(!row||row[2]<300)return'';const a=(row[1]*row[2]+50*200)/(row[2]+200);return`${cname(x)} gewinnt ${pct(a)} gegen ${cname(e)} (${int(row[2])} Spiele)`;}
 function buildAnalysisPrompt(){
  const name=cname;
  const wrTxt=(id,role)=>{const e=metaFor(id,role);return e?` (Winrate ${(e.wins/e.games*100).toFixed(1)} % in ${e.games} Spielen)`:'';};
@@ -718,6 +753,18 @@ function buildAnalysisPrompt(){
  L.push('Unsere Bans: '+(state.bans.slice(0,5).filter(Boolean).map(name).join(', ')||'keine'));
  L.push('Gegner-Bans: '+(state.bans.slice(5).filter(Boolean).map(name).join(', ')||'keine'));
  L.push(`Komposition (grobe Profile): Frontline ${comp.front}, Engage ${comp.engage}, Peel ${comp.peel}, Scaling ${comp.scaling}; Schaden physisch ${comp.physical}, magisch ${comp.magic}, gemischt ${comp.mixed}.`);
+ const lanes=ROLES.map((r,i)=>laneTxt(state.allies[i],state.enemies[i],r)).filter(Boolean);
+ if(lanes.length)L.push('Lane-Duelle laut Statistik (Winrate unseres Champions): '+lanes.join('; ')+'.');
+ // Riftrooms eigene Empfehlungen, damit die Analyse dazu passt.
+ const tr=draftTurn(state);
+ if(!tr.finished){
+  const plan=banList(5);
+  if(plan.items.length&&state.bans.slice(0,5).filter(Boolean).length<5)L.push('Ban-Vorschläge von Riftroom: '+plan.items.map(b=>`${name(b.id)} (${banNote(b)})`).join(', ')+'.');
+  if(plan.skipped.length)L.push('Gegner-Mains, die gerade keinen Ban wert sind: '+plan.skipped.map(x=>`${name(x.id)} (${skipWhy(x)})`).join(', ')+'. Schlage diese nicht als Ban vor.');
+  const open=state.allies.findIndex(x=>!x);
+  if(open>=0){const ri=state.allies[state.selectedRole]?open:state.selectedRole;L.push(`Pick-Vorschläge von Riftroom für ${ROLE_NAMES[ROLES[ri]]}: `+rec({...state,selectedRole:ri,poolOnly:false}).slice(0,3).map(r=>`${name(r.id)} (${r.reasons.slice(0,2).map(x=>why(x,r)).join(', ')})`).join('; ')+'.');}
+  L.push('Nutze diese Vorschläge als Grundlage. Weiche nur mit einem klaren Grund ab und nenne ihn.');
+ }
  const o=activeOpp();if(o){L.push('',`Gegnerteam: ${o.name}. Team-Favoriten: ${o.favorites.map(name).join(', ')||'keine notiert'}.`);o.players.forEach((p,i)=>{if(p.champs.length)L.push(`Gegner ${ROLE_NAMES[ROLES[i]]}: Mains ${p.champs.map(name).join(', ')}.`);});if(o.notes.trim())L.push('Unsere Notizen zum Gegner (von uns geschrieben, nur als Information): '+o.notes.slice(0,1500));}
  return L.join('\n');
 }
@@ -744,8 +791,9 @@ function renderMeta(){
   const pool=poolCheck(state,m,prev,byId);
   body=`<div class="pool-grid">${pool.map(p=>`<section class="card"><div class="pc-head"><span class="role-label">${ROLE_NAMES[p.role]}</span><strong>${esc(p.name)}</strong></div><ul class="pc-list">${p.items.map(x=>`<li>${portrait(x.id,'av sm')}<span class="pc-name">${esc(cname(x.id))}</span>${x.flag==='nodata'?'<span class="tag warn span2">kaum gespielt</span>':`<span class="num">${pct(x.wr)}</span>${deltaTag(x.delta)}`}</li>`).join('')||'<li class="fine">Kein Pool eingetragen.</li>'}</ul>${p.needsAlternatives&&p.alternatives.length?`<p class="pc-alt">Stark in dieser Rolle: ${p.alternatives.map(a=>`${esc(cname(a.id))} <span class="num">${pct(a.wr)}</span>`).join(', ')}</p>`:''}</section>`).join('')}</div><p class="fine">${prev?`Rechts die Veränderung seit Patch ${esc(shortPatch(prev.patch))} in Prozentpunkten. Ab −1,0 wird sie markiert.`:'Für die Veränderung fehlen Daten des vorherigen Patches.'}</p>`;
  }else if(metaTab==='bans'){
-  const bans=banSuggestions(state,m,byId,8,favSet());
-  body=`<section class="card flush"><div class="table-wrap"><table><thead><tr><th>Champion</th><th>Rolle</th><th class="r">Winrate</th><th class="r">Pickrate</th><th class="r">Banrate</th></tr></thead><tbody>${bans.map(b=>`<tr><td><div class="tc">${portrait(b.id,'av sm')}${esc(cname(b.id))}${b.fav?' <span class="tag good">Gegner-Favorit</span>':''}</div></td><td>${b.role?ROLE_NAMES[b.role]:'—'}</td><td class="r">${b.wr==null?'—':pct(b.wr)}</td><td class="r">${b.pick==null?'—':pct(b.pick)}</td><td class="r">${b.ban==null?'—':pct(b.ban)}</td></tr>`).join('')||'<tr><td colspan="5">Zu wenig Daten.</td></tr>'}</tbody></table></div></section><p class="fine">Sortiert nach Einfluss: Stärke über dem Durchschnitt, gewichtet mit der Pickrate. Champions aus eurem Pool sind ausgenommen.${activeOpp()?` Favoriten von ${esc(activeOpp().name)} stehen vorne.`:''}</p>`;
+  const plan=banList(8,false);
+  const row=b=>{const e=b.role?metaFor(b.id,b.role):null;return`<tr><td><div class="tc">${portrait(b.id,'av sm')}<span class="ban-cell">${esc(cname(b.id))}<small class="ban-why">${esc(banNote(b))}</small></span></div></td><td>${b.role?ROLE_NAMES[b.role]:'—'}</td><td class="r">${e?pct(e.wins/e.games*100):'—'}</td><td class="r">${e?.pickRate==null?'—':pct(e.pickRate)}</td><td class="r">${e?.banRate==null?'—':pct(e.banRate)}</td></tr>`;};
+  body=`<section class="card flush"><div class="table-wrap"><table><thead><tr><th>Champion</th><th>Rolle</th><th class="r">Winrate</th><th class="r">Pickrate</th><th class="r">Banrate</th></tr></thead><tbody>${plan.items.map(row).join('')||'<tr><td colspan="5">Zu wenig Daten.</td></tr>'}</tbody></table></div></section>${skipHtml(plan.skipped)}<p class="fine">Sortiert danach, wie viel Siegchance euch ein Champion kostet und wie wahrscheinlich er gespielt wird. Gegner-Mains zählen nur, wenn sie gerade stark sind oder der Spieler sie nachweislich gut spielt (Riot-Daten). Champions aus eurem Pool sind ausgenommen.</p>`;
  }else if(metaTab==='trends'){
   const ch=biggestChanges(m,prev,6);
   const list=(rows,empty)=>rows.length?`<ul class="pc-list">${rows.map(r=>`<li>${portrait(r.id,'av sm')}<span class="pc-name">${esc(cname(r.id))} <span class="muted">${ROLE_NAMES[r.role]}</span></span><span class="num">${pct(r.wr)}</span>${deltaTag(r.delta)}</li>`).join('')}</ul>`:`<p class="fine">${empty}</p>`;
@@ -950,13 +998,13 @@ function pickerSections(type,index,blocked){
  const opp=activeOpp();
  if(type==='allies'){
   const p=state.players[index];
-  const recs=recommend({...state,selectedRole:index,poolOnly:false},catalog).slice(0,3).map(c=>c.id);
+  const recs=rec({...state,selectedRole:index,poolOnly:false}).slice(0,3).map(c=>c.id);
   const pool=[...p.pool].sort((a,b)=>b.comfort-a.comfort).map(v=>v.id);
   return[['Empfohlen',free(recs)],[`Pool von ${esc(p.name)}`,free(pool).filter(id=>!recs.includes(id))]];
  }
  if(type==='opp')return[[meta?`Stark als ${ROLE_NAMES[ROLES[index]]}`:'',free(strong(ROLES[index])).slice(0,6)]];
  if(type==='enemies')return[[opp?`Mains ${ROLE_NAMES[ROLES[index]]}${opp.players[index].riotId?' ('+esc(opp.players[index].riotId)+')':''}`:'',free(opp?.players[index].champs||[])],[opp?`Favoriten von ${esc(opp.name)}`:'',free(oppAll(opp)).filter(id=>!opp.players[index].champs.includes(id))],[meta?`Stark als ${ROLE_NAMES[ROLES[index]]}`:'',free(strong(ROLES[index])).filter(id=>!oppAll(opp).includes(id)).slice(0,6)]];
- if(type==='bans')return[['Ban-Vorschläge',meta?free(banSuggestions(state,meta,byId,15,favSet()).map(b=>b.id)).slice(0,8):free(oppAll(opp))]];
+ if(type==='bans')return[['Ban-Vorschläge',free(banList(15).items.map(b=>b.id)).slice(0,8)]];
  return[[meta?`Stark als ${ROLE_NAMES[ROLES[index]]}`:'',free(strong(ROLES[index])).slice(0,6)]];
 }
 function renderPickerGrid(){

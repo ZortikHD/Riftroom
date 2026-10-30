@@ -402,24 +402,21 @@ function renderDraftExtras(){
  const analysis=STANDALONE?'':`<section class="card"><div class="card-head"><h2>Draft analysis</h2><button class="btn small ${analysisBusy?'':'primary'}" data-action="${analysisBusy?'stop-analysis':'analyze'}">${analysisBusy?'Stop':icon('spark')+'Analyze'}</button></div><div id="analysis-text" class="analysis">${analysisText?esc(analysisText):'<span class="muted">Claude sums up in a few sentences what is missing and what works.</span>'}</div></section>`;
  return`<div class="cs-extras">${compCard}${curve}${analysis}</div>`;
 }
-// Draft-Start wie im Champ Select: je fünf Plätze mit großem Splash. Links euer bester Comfort-Pick pro Spieler,
-// rechts die Mains des aktiven Gegners. Fehlt etwas, steht ein typischer Champion der Rolle da (blass), damit keine Seite leer wirkt.
-const DS_FALLBACK={TOP:['Garen','Darius','Ornn','Jax','Sett'],JUNGLE:['LeeSin','Viego','Vi','Graves','JarvanIV'],MIDDLE:['Ahri','Syndra','Yasuo','Orianna','Viktor'],BOTTOM:['Jinx','Kaisa','Caitlyn','Ezreal','Jhin'],UTILITY:['Thresh','Lulu','Leona','Nautilus','Rakan']};
-function dsTeams(){
- let used=new Set();const st=status();
- const popular=r=>[...(st.ok?state.meta.entries.filter(e=>e.role===r&&e.games>=10000).sort((a,b)=>(b.pickRate||0)-(a.pickRate||0)).map(e=>e.champion):[]),...DS_FALLBACK[r]].filter(id=>SQUARE[id]);
- const take=list=>{const id=list.find(x=>SQUARE[x]&&!used.has(x));if(id)used.add(id);return id;};
- const blue=ROLES.map((r,i)=>{const p=state.players[i],own=take([...p.pool].sort((a,b)=>b.comfort-a.comfort).map(v=>v.id));return{r,id:own||take(popular(r)),name:p.name,sub:own?cname(own):'Pool empty',empty:!own};});
- const o=activeOpp();used=new Set();// Spiegel-Picks sind erlaubt: Doppelte nur innerhalb einer Seite vermeiden.
- const red=ROLES.map((r,i)=>{const pl=o?.players[i],main=take(pl?.champs||[]),id=main||take(popular(r)),tag=pl?.riotId?pl.riotId.split('#')[0]:'';return{r,id,name:tag||cname(id),sub:tag?cname(id):'',empty:false};});
- return{blue,red,oppName:o?.name||'Opponent'};
+// Draft-Start: links und rechts ziehen ganz langsam zufällige Champion-Bilder vorbei, blau und rot getönt.
+// Einmal pro Besuch gemischt, damit beim Neuzeichnen nichts springt.
+let dsPicks=null;
+function dsSide(side){
+ if(!dsPicks){const ids=catalog.champions.map(c=>c.id).filter(id=>SQUARE[id]);for(let i=ids.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[ids[i],ids[j]]=[ids[j],ids[i]];}dsPicks=ids;}
+ const n=dsPicks.length||1,base=side==='blue'?0:24;
+ const cols=[0,1,2,3].map(c=>[0,1,2,3,4,5].map(k=>dsPicks[(base+c*6+k)%n]).filter(Boolean));
+ // Startpunkt aus der Uhrzeit: neu zeichnen setzt die Spalten nicht zurück, die Bewegung läuft einfach weiter.
+ const now=Date.now()/1000;
+ return`<div class="ds-mosaic ${side}" aria-hidden="true">${cols.map((ids,c)=>`<div class="ds-col"><div class="ds-strip" style="animation-duration:${130+c*20}s;animation-delay:-${(now%(130+c*20)).toFixed(2)}s">${[...ids,...ids].map(id=>`<img src="${SQUARE[id]}" alt="" decoding="async">`).join('')}</div></div>`).join('')}</div>`;
 }
-const dsSlot=(x,k)=>`<div class="ds-slot${x.empty?' ds-empty':''}" style="--k:${k}"><img src="${LOADING[x.id]||SQUARE[x.id]||'icon.svg'}" alt="" loading="lazy"><div class="ds-slot-text"><span class="role-label">${ROLE_NAMES[x.r]}</span><b>${esc(x.name)}</b>${x.sub?`<small>${esc(x.sub)}</small>`:''}</div></div>`;
 function renderDraftStart(){
  if(room?.role==='viewer')return`<section class="card empty room-wait"><h2>Waiting for the draft</h2><p>As soon as ${esc(state.teamName)} starts the draft, you'll see every ban and pick here live.</p></section>`;
  const intro=renderChecklist();
- const t=dsTeams();
- return`<section class="ds-hero"><div class="ds-team blue" aria-label="${esc(state.teamName)}"><div class="ds-team-head"><span class="side-tag blue"><span class="ds-tn">${esc(state.teamName)}</span></span></div>${t.blue.map(dsSlot).join('')}</div><div class="ds-mid"><span class="ds-eyebrow">Champ Select · Tournament order</span><h1>Ready to draft?</h1><p>Ban and pick in turns, step by step, with suggestions for every role.</p><button class="btn primary big" data-action="draft-open">${icon('play')}Start draft</button>${STANDALONE&&!room?`<button class="btn ds-room" data-action="room-open">${icon('users')}Live room for your team</button>`:''}</div><div class="ds-team red" aria-label="${esc(t.oppName)}"><div class="ds-team-head"><span class="side-tag red"><span class="ds-tn">${esc(t.oppName)}</span></span></div>${t.red.map(dsSlot).join('')}</div></section>`+intro+renderTemplates();
+ return`<section class="ds-hero">${dsSide('blue')}${dsSide('red')}<div class="ds-side blue"><span>Blue</span></div><div class="ds-mid"><span class="ds-eyebrow">Champ Select · Tournament order</span><h1>Ready to draft?</h1><p>Ban and pick in turns, step by step, with suggestions for every role.</p><button class="btn primary big" data-action="draft-open">${icon('play')}Start draft</button>${STANDALONE&&!room?`<button class="btn ds-room" data-action="room-open">${icon('users')}Live room for your team</button>`:''}</div><div class="ds-side red"><span>Red</span></div></section>`+intro+renderTemplates();
 }
 // Startliste: was ein neues Team der Reihe nach erledigen sollte. Der erste offene Punkt ist hervorgehoben.
 const EX_POOLS=initialState().players.map(p=>p.pool.map(v=>v.id).join());

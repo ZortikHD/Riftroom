@@ -252,13 +252,13 @@ tbody tr:hover td{background:var(--raised)}
 .fav .icon-btn{width:24px;height:24px}
 .label-row select.field{height:32px;font-size:13px}
 .opp-players{display:flex;flex-direction:column}
-.opp-player{display:grid;grid-template-columns:72px minmax(0,1fr) 32px;gap:8px 10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.opp-player{display:grid;grid-template-columns:72px minmax(0,1fr) auto auto;gap:8px 10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
 .opp-player:first-child{border-top:0;padding-top:0}
 .opp-player .field{height:36px}
 .opp-player .ext{text-decoration:none;font-size:16px}
 .opp-mains{grid-column:2/-1;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .opp-mains:empty{display:none}
-@media(max-width:480px){.opp-player{grid-template-columns:56px minmax(0,1fr) 32px}.opp-mains{grid-column:1/-1}}
+@media(max-width:480px){.opp-player{grid-template-columns:56px minmax(0,1fr) auto auto}.opp-mains{grid-column:1/-1}}
 
 /* Team */
 .team-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,220px),1fr));gap:14px}
@@ -1552,3 +1552,48 @@ html.calm-splash #splash.out{transform:none;filter:none}
 @media(max-width:1100px){.lb-games{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:600px){.lb-slots{grid-template-columns:repeat(2,minmax(0,1fr))}.lb-code{align-items:flex-start}.lb-code-tiles .mg-l{width:36px;height:44px;font-size:22px}.lb-race{grid-template-columns:1fr 1fr}.lb-runner{padding:8px}.lb-runner .mg-av{display:none}.lb-runner b{font-size:20px}.lb-games{grid-template-columns:repeat(2,minmax(0,1fr))}.lb-table .lb-sq{display:none}.lb-head h2{font-size:24px}}
 @media (prefers-reduced-motion:reduce){.lb-game,.lb-slot,.lb-face,.lb-table li,.lb-demo .mg-av,.game-tile.mp .gt-text b::before,.lb-slot.empty .mg-av{animation:none}}
+
+/* Riot-Abfrage */
+.av.xs{width:20px;height:20px;border-radius:5px}
+.riot-row{display:flex;gap:8px}
+.riot-row .field{flex:1;min-width:0;height:36px}
+.riot-res{display:flex;flex-direction:column;gap:8px}
+.riot-res:empty{display:none}
+.opp-player .riot-res{grid-column:2/-1}
+.riot-res:not(:empty){position:relative;padding:10px 12px;border-radius:12px;background:var(--raised);border:1px solid var(--line);animation:pop-in .3s both}
+.riot-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.riot-head{padding-right:34px}
+.riot-head>.icon-btn{position:absolute;top:6px;right:6px}
+.riot-head .icon-btn svg{width:16px;height:16px}
+.riot-rank{white-space:nowrap;font:700 13px var(--f-display);text-transform:uppercase;letter-spacing:.04em;padding:3px 9px;border-radius:999px;background:var(--surface);border:1px solid var(--line-strong)}
+.riot-rank.none{color:var(--muted)}
+.riot-rank.t-iron,.riot-rank.t-bronze{color:#c89b7b}
+.riot-rank.t-silver{color:#b9c3cc}
+.riot-rank.t-gold{color:#e8c25a}
+.riot-rank.t-platinum{color:#5fd1c4}
+.riot-rank.t-emerald{color:#3fd68b}
+.riot-rank.t-diamond{color:#8fb1ff}
+.riot-rank.t-master{color:#c58bff}
+.riot-rank.t-grandmaster{color:#ff6b7c}
+.riot-rank.t-challenger{color:#ffd76b;border-color:#ffd76b}
+.riot-sub{margin:0}
+.riot-note{margin:0;font-size:13px;color:var(--warn)}
+.riot-status{display:flex;align-items:center;gap:8px;margin:0;font-size:14px;color:var(--muted)}
+.riot-status .spinner,.riot-head .spinner{margin:0}
+.riot-err{margin:0;font-size:14px;color:var(--red)}
+.riot-list{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.riot-list li{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:8px;align-items:center}
+.riot-cname{display:flex;flex-direction:column;min-width:0}
+.riot-cname b{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.riot-cname small{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.riot-add svg{width:16px;height:16px}
+.riot-add.on{color:var(--accent);border-color:var(--accent)}
+.riot-chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.riot-chips>.fine{width:100%}
+.riot-chip{display:inline-flex;align-items:center;gap:5px;padding:2px 8px 2px 2px;border-radius:999px;background:var(--surface);border:1px solid var(--line);font-size:13px}
+.riot-chip small{color:var(--muted)}
+.riot-res .btn.small{align-self:flex-start}
+@media (prefers-reduced-motion:reduce){.riot-res:not(:empty){animation:none}}
+.opp-detail .label-row{flex-wrap:wrap;gap:8px}
+.opp-detail .label-row .row{flex-wrap:wrap;justify-content:flex-end}
+@media(max-width:480px){.opp-player .riot-res{grid-column:1/-1}}

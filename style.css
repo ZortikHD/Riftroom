@@ -1576,7 +1576,7 @@ html.calm-splash #splash.out{transform:none;filter:none}
 .page-head>div:first-child{min-width:0}
 .page-head .sub{max-width:68ch;color:var(--muted)}
 .head-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
-@media (max-width:700px){.page-head{align-items:flex-start}.head-actions{width:100%}}
+@media (max-width:700px){.page-head{align-items:flex-end}}
 /* Navigation: Minispiele im Hauptmenü, am Handy kurze Beschriftung. Draft und Spielplan als Reiter. */
 .tab-short{display:none}
 @media (max-width:520px){.tab-full{display:none}.tab-short{display:inline}}
@@ -1592,3 +1592,50 @@ html.calm-splash #splash.out{transform:none;filter:none}
 @media (max-width:380px){.tab{padding:12px 6px;font-size:14px}}
 @media (max-width:340px){.tab{padding:12px 5px;font-size:13px}}
 @media (max-width:360px){.cs-ban{width:25px;height:25px}.cs-ban-row{gap:2px}}
+/* Champ Select: Schritte nach Phasen gruppiert, rechts neben der Ansage. */
+.cs-phase{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"main timer" "main steps";align-items:center}
+.cs-phase .steps{display:flex;flex-wrap:nowrap;gap:14px;justify-self:end;align-self:end}
+.step-group{display:flex;flex-direction:column;gap:5px;opacity:.6;transition:opacity .2s}
+.step-group.cur{opacity:1}
+.step-label{font:600 11px var(--f-body);letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.step-group.cur .step-label{color:var(--text)}
+.step-pips{display:flex;gap:3px}
+.step{min-width:22px;height:22px;padding:0;border-radius:var(--r-sm);border:0;font:600 11px var(--f-body);font-variant-numeric:tabular-nums;color:var(--blue);background:color-mix(in srgb,var(--blue) 14%,transparent)}
+.step.r{color:var(--red);background:color-mix(in srgb,var(--red) 14%,transparent)}
+.step.done{opacity:.4}
+.step.now{opacity:1;color:var(--bg);background:var(--blue);box-shadow:0 0 0 2px var(--bg),0 0 0 3.5px var(--blue)}
+.step.r.now{background:var(--red);box-shadow:0 0 0 2px var(--bg),0 0 0 3.5px var(--red)}
+@media (max-width:1180px){.cs-phase{grid-template-columns:minmax(0,1fr);grid-template-areas:"main" "timer" "steps"}.cs-phase .steps{justify-self:start}}
+/* Bans direkt über der jeweiligen Teamspalte */
+.cs-team>.cs-ban-row{margin-bottom:4px}
+.cs-team.theirs>.cs-ban-row{justify-content:flex-end}
+@media (max-width:1000px){.cs-team>.cs-ban-row{grid-column:1/-1}.cs-team.theirs>.cs-ban-row{justify-content:flex-start}}
+/* Teamkopf: Riot-ID-Knopf als Symbol, damit der Teamname Platz hat */
+.cs-team-head .side-tag{min-width:0;flex:1}
+.cs-scout{padding:0 8px}
+.cs-scout span{font-variant-numeric:tabular-nums}
+/* Rollenfrage kompakt in einer Zeile */
+.role-adv{flex-direction:row;align-items:center;gap:10px;margin-bottom:12px}
+.role-adv .label{flex:none;font-size:13px;color:var(--muted);margin:0}
+.role-adv-row{flex:1;min-width:0}
+.ra{min-width:0;max-width:200px;padding:5px 10px}
+.ra small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+@media (max-width:700px){.role-adv{flex-direction:column;align-items:stretch;gap:6px}}
+/* Nach dem Draft: Fazit in der Mitte */
+.cs-summary{display:flex;flex-direction:column;gap:18px;padding:22px}
+.cs-sum-head{display:flex;align-items:center;gap:12px}
+.cs-sum-head .icon.big{width:30px;height:30px;padding:6px;border-radius:50%;background:var(--accent-soft);color:var(--accent);box-sizing:content-box}
+.cs-sum-head h2{font-size:24px}
+.cs-sum-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:18px 24px;align-items:start}
+.cs-sum-part{min-width:0}
+.cs-sum-part .comp{grid-template-columns:repeat(3,minmax(0,1fr));border-top:0;padding-top:0}
+.cs-sum-part .dmg{grid-column:1/-1}
+.cs-sum-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:auto;padding-top:16px;border-top:1px solid var(--line)}
+.draft-tabs-row{display:flex;align-items:flex-end;justify-content:space-between;gap:6px 16px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin-top:-6px}
+.draft-tabs-row .draft-tabs{border-bottom:0;margin:0}
+.draft-sub{color:var(--muted);font-size:14px;padding-bottom:10px}
+.cs-team-head{min-height:34px}
+.cs-summary .cs-sum-head{flex-direction:row;align-items:center;max-width:none;text-align:left}
+.cs-sum-part .meter-top{flex-direction:column;align-items:flex-start;gap:0}
+.cs-phase.done .steps{display:none}
+@media (max-width:700px){.cs-phase .steps{display:none}.draft-sub{padding-bottom:8px;font-size:13px}}

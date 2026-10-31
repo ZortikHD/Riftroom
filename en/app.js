@@ -26,7 +26,7 @@ if(STANDALONE){
 }
 const calm=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const paths={swap:'M7 4 3 8l4 4 M3 8h14 M17 20l4-4-4-4 M21 16H7',search:'M21 21l-5-5 M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0',close:'m6 6 12 12 M6 18 18 6',plus:'M12 5v14 M5 12h14',spark:'m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z',upload:'M12 16V4 m-5 5 5-5 5 5 M4 16v5h16v-5',download:'M12 3v12 m-5-5 5 5 5-5 M4 16v5h16v-5',chevrondown:'m6 9 6 6 6-6',trash:'M3 6h18 M9 6V3h6v3 M5 6l1 15h12l1-15',map:'M9 4 3 6v14l6-2 6 2 6-2V4l-6 2z M9 4v14 M15 6v14',users:'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M22 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75',timer:'M12 8v5l3 2 M9 2h6 M20 13a8 8 0 1 1-16 0 8 8 0 0 1 16 0',copy:'M8 8h12v12H8z M16 8V4H4v12h4',play:'M7 4v16l13-8z',book:'M4 4h10a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4z M8 20a4 4 0 0 1 0-8h10',back:'M15 18l-6-6 6-6',refresh:'M20 7v5h-5 M4 17v-5h5 M6 7a7 7 0 0 1 12-2l2 3 M18 17a7 7 0 0 1-12 2l-2-3'};
+const paths={check:'M5 12.5l4.5 4.5L19 7.5',swap:'M7 4 3 8l4 4 M3 8h14 M17 20l4-4-4-4 M21 16H7',search:'M21 21l-5-5 M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0',close:'m6 6 12 12 M6 18 18 6',plus:'M12 5v14 M5 12h14',spark:'m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z',upload:'M12 16V4 m-5 5 5-5 5 5 M4 16v5h16v-5',download:'M12 3v12 m-5-5 5 5 5-5 M4 16v5h16v-5',chevrondown:'m6 9 6 6 6-6',trash:'M3 6h18 M9 6V3h6v3 M5 6l1 15h12l1-15',map:'M9 4 3 6v14l6-2 6 2 6-2V4l-6 2z M9 4v14 M15 6v14',users:'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M22 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75',timer:'M12 8v5l3 2 M9 2h6 M20 13a8 8 0 1 1-16 0 8 8 0 0 1 16 0',copy:'M8 8h12v12H8z M16 8V4H4v12h4',play:'M7 4v16l13-8z',book:'M4 4h10a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4z M8 20a4 4 0 0 1 0-8h10',back:'M15 18l-6-6 6-6',refresh:'M20 7v5h-5 M4 17v-5h5 M6 7a7 7 0 0 1 12-2l2 3 M18 17a7 7 0 0 1-12 2l-2-3'};
 const icon=(name,cls='')=>`<svg class="icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[name]||paths.spark}"/></svg>`;
 
 let state=initialState(),catalog,page='draft',metaTab='pool',refreshMessage='',toastTimer,pickerTarget=null,pickerRole='ALL',pickerSearch='',metaRole='ALL',metaSearch='',metaSort='adjusted',confirmAction=null,prevMeta=null,backupTimer,selectedOpponent='',analysisText='',analysisBusy=false,analysisCtrl=null,templatesOpen=false,logResult=null;
@@ -220,7 +220,10 @@ function renderDraft(){
  // Phase
  const verb=t.finished?'Draft complete':c.who==='us'?(c.type==='ban'?'You ban':'You pick'):(c.type==='ban'?'Opponent bans':'Opponent picks');
  const hint=t.finished?'All picks are locked. Time for the game plan.':aiTurn?'The computer is thinking …':c.who==='them'&&!practice?`${c.type==='ban'?'Ban':'Pick'} ${c.n} of 5 · enter what the opponent chooses`:`${c.type==='ban'?'Ban':'Pick'} ${c.n} of 5`;
- const steps=t.steps.map(s=>`<span class="step ${s.side==='B'?'b':'r'} ${s.done?'done':''} ${c&&c.i===s.i?'now':''}" title="${s.who==='us'?'You':'Opponent'} · ${s.type==='ban'?'Ban':'Pick'} ${s.n}">${s.type==='ban'?'B':'P'}${s.n}</span>`).join('');
+ const stepSpan=s=>`<span class="step ${s.side==='B'?'b':'r'} ${s.done?'done':''} ${c&&c.i===s.i?'now':''}" title="${s.who==='us'?'You':'Opponent'} · ${s.type==='ban'?'Ban':'Pick'} ${s.n}">${s.n}</span>`;
+ // Schritte nach Phasen gruppiert (Bans 1 · Picks 1 · Bans 2 · Picks 2), damit man sieht, wo man im Ablauf steht.
+ const groups=[];for(const s of t.steps){const g=groups[groups.length-1];if(g&&g.type===s.type)g.items.push(s);else groups.push({type:s.type,items:[s]});}
+ const steps=groups.map((g,k)=>`<span class="step-group ${g.items.some(s=>c&&c.i===s.i)?'cur':''}"><span class="step-label">${g.type==='ban'?'Bans':'Picks'} ${groups.slice(0,k+1).filter(x=>x.type===g.type).length}</span><span class="step-pips">${g.items.map(stepSpan).join('')}</span></span>`).join('');
  const left=practice?.deadline?Math.max(0,practice.deadline-Date.now()):null;
  const timer=left!=null?`<div class="cs-timer"><span id="practice-time" class="num">${Math.ceil(left/1000)}</span><div class="timer-bar"><i id="practice-bar" style="width:${left/300}%"></i></div></div>`:'';
  const pk=t.finished?'done':String(c.i),changed=lastPhaseKey!==null&&pk!==lastPhaseKey,prevWho=lastPhaseWho;
@@ -230,8 +233,8 @@ function renderDraft(){
  const phase=`<section class="cs-phase side-${t.finished?ours:sideOf(c.who)} ${t.finished?'done':''} ${fx}">${fx.includes('yourturn')?'<span class="yt-tag">Your turn</span>':''}<div class="cs-phase-main"><strong>${verb}</strong><span>${hint}</span>${!t.finished&&!aiTurn?`<span class="cs-focus">${icon('spark')}${esc(focusTip(c))}</span>`:''}</div>${timer}<div class="steps">${steps}</div><div class="steps-compact"><span>${t.finished?'Done':`Step ${c.i+1} of ${t.steps.length}`}</span><div class="steps-bar"><i style="width:${(t.finished?t.steps.length:c.i)/t.steps.length*100}%"></i></div></div></section>`;
  // Bans
  const ban=i=>{const id=state.bans[i],act=tgt?.type==='bans'&&tgt.index===i;return`<span class="cs-ban ${id?'filled':''} ${id==='none'?'none':''} ${act?'active':''} ${isNew('bans',i)?'just':''}" title="${id?esc(cname(id)):act?'Ban in progress':'Ban '+(i%5+1)}">${id==='none'?'<span class="no-ban">–</span>':id?portrait(id,''):act&&hoverId?`<img class="ghost" src="${SQUARE[hoverId]||'icon.svg'}" alt="">`:''}</span>`;};
- const bans=`<div class="cs-bans"><div class="cs-ban-row side-${ours}">${[0,1,2,3,4].map(ban).join('')}</div><span class="fine">Bans</span><div class="cs-ban-row side-${theirs} rev">${[5,6,7,8,9].map(ban).join('')}</div></div>`;
- const html=head('Draft',sub,actions).replace('class="head-actions"',t.finished?'class="head-actions m-dock"':'class="head-actions"')+draftTabs('draft')+phase+bans+flUsedHtml()+`<div class="cs-grid-wrap">${teamColumn('allies',ours,tgt,t)}${renderCenter(t,c,tgt,aiTurn)}${teamColumn('enemies',theirs,tgt,t)}</div>`+renderDraftExtras();
+ const banA=`<div class="cs-ban-row side-${ours}" aria-label="Bans">${[0,1,2,3,4].map(ban).join('')}</div>`,banB=`<div class="cs-ban-row side-${theirs} rev" aria-label="Bans">${[5,6,7,8,9].map(ban).join('')}</div>`;
+ const html=head('Draft','',actions).replace('class="head-actions"',t.finished?'class="head-actions m-dock"':'class="head-actions"')+draftTabs('draft',sub)+phase+flUsedHtml()+`<div class="cs-grid-wrap">${teamColumn('allies',ours,tgt,t,banA)}${renderCenter(t,c,tgt,aiTurn)}${teamColumn('enemies',theirs,tgt,t,banB)}</div>`+renderDraftExtras();
  lastBoard={allies:[...state.allies],enemies:[...state.enemies],bans:[...state.bans]};lastComp=composition(state.allies);
  return html;
 }
@@ -242,7 +245,7 @@ function poolStatus(i){
  const imgs=pool.slice(0,5).map(v=>`<img src="${SQUARE[v.id]}" alt="" class="${tk.has(v.id)?'gone':''}" title="${esc(cname(v.id))}${tk.has(v.id)?' (weg)':''}">`).join('');
  return`<span class="cs-pool ${warn?'warn':''}" title="${free} of ${pool.length} pool champions available"><span class="cs-pool-imgs">${imgs}</span><span class="cs-pool-n">${warn?'! ':''}${free}/${pool.length}</span></span>`;
 }
-function teamColumn(type,side,tgt,t){
+function teamColumn(type,side,tgt,t,bansHtml=''){
  const list=state[type],us=type==='allies',enemyInfo=us?null:roleInfo(state.enemies);
  const rows=list.map((id,i)=>{
   const pv=t.current?.type==='pick'&&tgt?.type===type&&pickRole!=null&&!list[pickRole]?pickRole:tgt?.index;
@@ -255,7 +258,7 @@ function teamColumn(type,side,tgt,t){
   const ps=us&&!id&&!t.finished?poolStatus(i):'';
   const attrs=canTarget?`data-cs-target="${type}|${i}"`:t.finished&&!practice?`data-picker="${type}" data-index="${i}"`:'';
   return`<div data-slot="${type}|${i}" class="cs-row ${id?'filled':''} ${act?'active':''} ${isNew(type,i)?'just':''}">${attrs?`<button class="cs-row-btn" ${attrs} aria-label="${us?'Your':'Opponent'} ${ROLE_NAMES[ROLES[i]]}${id?': '+esc(cname(id)):''}"></button>`:''}${img?`<img class="cs-splash ${prev&&!id?'ghost':''}" src="${LOADING[img]||SQUARE[img]||'icon.svg'}" alt="">`:''}<div class="cs-row-text"><span class="role-label">${ROLE_NAMES[ROLES[i]]}${fx?'?':''}</span><strong>${name||'<span class="muted">—</span>'}</strong>${us?`<span class="fine">${who}</span>`:''}${us?wishChip(i):''}${fx?`<span class="flex-note" title="Can play several roles. Only later will you know which."><i class="flex-tag">Flex</i>${fx.map(r=>ROLE_NAMES[r]).join(' / ')}</span>`:''}${ps}</div>${id?`<button class="cs-swap" data-swap="${type}|${i}" title="Swap role or change pick" aria-label="${esc(cname(id))}: swap role or change pick">${icon('swap')}</button>`:''}${!us&&id?`<button class="cs-mu ${mu?'has':''}" data-mu-edit="${id}" title="${mu?esc(mu):'Matchup note on '+esc(cname(id))}" aria-label="Matchup note on ${esc(cname(id))}">${icon('book')}</button>`:''}</div>`;}).join('');
- return`<section class="cs-team side-${side} ${us?'ours':'theirs'}"><div class="cs-team-head"><span class="side-tag ${side}">${esc(us?state.teamName:(activeOpp()?.name||'Opponent'))}</span>${!us&&STANDALONE&&room?.role!=='viewer'&&!practice?scoutBtn():''}</div>${rows}</section>`;
+ return`<section class="cs-team side-${side} ${us?'ours':'theirs'}"><div class="cs-team-head"><span class="side-tag ${side}">${esc(us?state.teamName:(activeOpp()?.name||'Opponent'))}</span>${!us&&STANDALONE&&room?.role!=='viewer'&&!practice?scoutBtn():''}</div>${bansHtml}${rows}</section>`;
 }
 // Vorschläge für den aktuellen Schritt.
 // Kurze Begründung für Pick-Vorschläge, z. B. „passt zum Pool (4/5) · ergänzt Engage“.
@@ -297,12 +300,13 @@ function roleAdvice(){
  }).sort((a,b)=>b.score-a.score||a.i-b.i);
 }
 function renderCenter(t,c,tgt,aiTurn){
- if(t.finished)return`<section class="card cs-center cs-done"><div class="cs-done-in">${icon('map','big')}<h2>Draft complete</h2><p class="fine">The game plan shows the map with all champions and short notes for every position.</p><button class="btn primary" data-page="plan">Open game plan</button>${state.fearless&&room?.role!=='viewer'?flNextHtml():''}${practice?'<button class="btn ghost small" data-action="practice-again">Practice again</button>':''}</div></section>`;
+ // Nach dem Draft: Fazit direkt in der Mitte (Zusammenstellung und Stärkekurve), darunter der Weg zum Spielplan.
+ if(t.finished)return`<section class="card cs-center cs-summary"><div class="cs-done-in cs-sum-head">${icon('check','big')}<h2>Summary</h2></div><div class="cs-sum-grid"><div class="cs-sum-part">${compCardHtml()}</div><div class="cs-sum-part">${renderCurve(true)}</div></div><div class="cs-sum-actions"><button class="btn primary" data-page="plan">${icon('map')}Open game plan</button>${state.fearless&&room?.role!=='viewer'?flNextHtml():''}${practice?'<button class="btn ghost small" data-action="practice-again">Practice again</button>':''}</div></section>`;
  if(room?.role==='viewer'&&c.who!=='us')return`<section class="card cs-center cs-wait"><div class="cs-done-in"><div class="spinner"></div><p>${c.who==='us'?`${esc(state.teamName)} ${c.type==='ban'?'bans':'picks'} …`:`${esc(state.teamName)} is entering ${c.type==='ban'?'the enemy ban':'the enemy pick'} …`}</p><p class="fine">You're watching live. Every ban and pick appears instantly.</p></div></section>`;
  if(aiTurn)return`<section class="card cs-center cs-wait"><div class="cs-done-in"><div class="spinner"></div><p>The computer ${c.type==='ban'?'bans':'picks'} …</p></div></section>`;
  const sug=stepSuggestions(c,tgt);
  const adv=c.who==='us'&&c.type==='pick'?roleAdvice():[],curRole=pickRole!=null?pickRole:tgt?.index;
- const advHtml=adv.length?`<div class="role-adv"><span class="label">Which role should pick now?</span><div class="role-adv-row">${adv.map((x,k)=>`<button class="ra ${k===0?'best':''} ${x.i===curRole?'on':''}" data-ra="${x.i}" aria-pressed="${x.i===curRole}">${k===0?'<i class="ra-star" aria-hidden="true">★</i>':''}<b>${ROLE_NAMES[ROLES[x.i]]}</b><small>${esc(x.reasons[0])}</small></button>`).join('')}</div></div>`:'';
+ const advHtml=adv.length?`<div class="role-adv"><span class="label">Pick now:</span><div class="role-adv-row">${adv.map((x,k)=>`<button class="ra ${k===0?'best':''} ${x.i===curRole?'on':''}" data-ra="${x.i}" aria-pressed="${x.i===curRole}">${k===0?'<i class="ra-star" aria-hidden="true">★</i>':''}<b>${ROLE_NAMES[ROLES[x.i]]}</b><small>${esc(x.reasons[0])}</small></button>`).join('')}</div></div>`:'';
  const sugHtml=`<div id="team-wish">${teamWishHtml(c)}</div>`+advHtml+(sug.title&&sug.items.length?`<div class="cs-sug"><span class="label">${sug.title}</span><div class="cs-sug-row">${sug.items.map(x=>`<button class="cs-sug-item ${hoverId===x.id?'on':''}" data-hover="${x.id}" title="${esc(x.note)}">${portrait(x.id,'av sm')}<span><b>${esc(cname(x.id))}${c.type==='pick'&&(profileOf(x.id)?.roles.length||0)>1?'<i class="flex-tag" title="Can play several roles">Flex</i>':''}</b><small class="${x.top?'why':''}">${esc(x.note)}</small></span>${x.score!=null?`<span class="mini-score">${x.score}</span>`:''}</button>`).join('')}</div>${sug.after||''}</div>`:'');
  const roles=['ALL',...ROLES];
  return`<section class="card cs-center">${sugHtml}<div class="cs-filter"><div class="search">${icon('search')}<input class="field" id="cs-search" placeholder="Search champion" value="${esc(csSearch)}" autocomplete="off" aria-label="Search champion"></div><button class="pool-toggle" data-cs-pool aria-pressed="${csPoolOnly}" title="Only show champions from your pools">Pools only</button><div class="seg cs-roles" role="group" aria-label="Role">${roles.map(r=>`<button data-cs-role="${r}" aria-pressed="${csRole===r}">${r==='ALL'?'All':ROLE_NAMES[r]}</button>`).join('')}</div></div><div class="cs-champs" id="cs-grid">${csGrid()}</div><div class="cs-lock" id="cs-lock">${lockBar()}</div></section>`;
@@ -398,8 +402,9 @@ function compCardHtml(){
  return`<div class="card-head"><h2>Composition</h2><span class="muted">${pv?`<span class="tag good">Preview</span>`:`${comp.count} / 5`}</span></div><div class="comp">${meter('Frontline',comp.front,'front')}${meter('Engage',comp.engage,'engage')}${meter('Peel',comp.peel,'peel')}<div class="dmg"><div class="dmg-legend">${dmg.map(([k,c,l])=>`<span><i class="${c}"></i>${l} ${d[k]}</span>`).join('')}</div><div class="dmg-bar">${d.known?dmg.filter(([k])=>d[k]).map(([k,c])=>`<span class="${c}" style="flex:${d[k]}"></span>`).join(''):''}</div></div></div>`;
 }
 function renderDraftExtras(){
- const compCard=`<section class="card" id="comp-card">${compCardHtml()}</section>`;
- const curve=state.allies.some(Boolean)&&state.enemies.some(Boolean)?`<section class="card"><div class="card-head"><h2>Power curve</h2><span class="tag">Estimate</span></div>${renderCurve(true)}</section>`:'';
+ const fin=draftTurn(state).finished;
+ const compCard=fin?'':`<section class="card" id="comp-card">${compCardHtml()}</section>`;
+ const curve=!fin&&state.allies.some(Boolean)&&state.enemies.some(Boolean)?`<section class="card"><div class="card-head"><h2>Power curve</h2><span class="tag">Estimate</span></div>${renderCurve(true)}</section>`:'';
  const analysis=STANDALONE?'':`<section class="card"><div class="card-head"><h2>Draft analysis</h2><button class="btn small ${analysisBusy?'':'primary'}" data-action="${analysisBusy?'stop-analysis':'analyze'}">${analysisBusy?'Stop':icon('spark')+'Analyze'}</button></div><div id="analysis-text" class="analysis">${analysisText?esc(analysisText):'<span class="muted">Claude sums up in a few sentences what is missing and what works.</span>'}</div></section>`;
  return`<div class="cs-extras">${compCard}${curve}${analysis}</div>`;
 }
@@ -488,7 +493,7 @@ function openSwapDialog(type,i){
  $('#confirm-dialog').showModal();
 }
 // Gegner scouten direkt im Draft: Riot-IDs eintragen und laden. Die meistgespielten Champions fließen sofort in die Ban-Vorschläge.
-const scoutBtn=()=>{const o=activeOpp(),n=o?o.players.filter(p=>validRiotId(p.riotId)).length:0;return`<button class="btn small cs-scout" data-action="scout-open">${icon('users')}${n?`Riot IDs (${n}/5)`:'Enter Riot IDs'}</button>`;};
+const scoutBtn=()=>{const o=activeOpp(),n=o?o.players.filter(p=>validRiotId(p.riotId)).length:0;const full=n?`Riot IDs (${n}/5)`:'Enter Riot IDs';return`<button class="btn small cs-scout" data-action="scout-open" title="${full}" aria-label="${full}">${icon('users')}${n?`<span>${n}/5</span>`:''}</button>`;};
 function openScout(){
  if(!activeOpp()){const o={id:Date.now().toString(36),name:'Opponent',notes:'',favorites:[],region:state.riotRegion||'euw',players:emptyOppPlayers()};state.opponents.push(o);state.opponentId=o.id;save();}
  const o=activeOpp();selectedOpponent=o.id;confirmAction=null;
@@ -606,7 +611,7 @@ function mapSvg(ours){
  </svg>`;
 }
 // Draft und Spielplan gehören zusammen: zwei Reiter direkt unter dem Seitenkopf.
-const draftTabs=on=>`<div class="subtabs draft-tabs" role="tablist"><button role="tab" data-page="draft" aria-selected="${on==='draft'}">Champ Select</button><button role="tab" data-page="plan" aria-selected="${on==='plan'}">Game plan</button></div>`;
+const draftTabs=(on,sub='')=>`<div class="draft-tabs-row"><div class="subtabs draft-tabs" role="tablist"><button role="tab" data-page="draft" aria-selected="${on==='draft'}">Champ Select</button><button role="tab" data-page="plan" aria-selected="${on==='plan'}">Game plan</button></div>${sub?`<span class="draft-sub">${sub}</span>`:''}</div>`;
 function renderPlan(){
  const back='';
  if(!(state.allies.every(Boolean)&&state.enemies.every(Boolean)))return head('Game plan','The game plan appears once all ten champions are set.',back)+draftTabs('plan')+`<section class="card empty"><p>Set all picks for both teams first.</p><button class="btn primary" data-page="draft">To the draft</button></section>`;
@@ -625,7 +630,7 @@ function renderPlan(){
   const when=(ai?.wann||[]).map(x=>{const m=x.match(/^\s*(ca\.\s*)?(\d{1,2}:\d{2}(?:\s*[–-]\s*\d{1,2}:\d{2})?)\s*[–:-]?\s*(.*)$/);return m?[m[2].replace(/\s+/g,''),m[3]]:['',x];});
   const bmHtml=`<div class="bench"><h4>Your benchmarks</h4><ul class="bench-list">${[...bm.items,...when].map(([t,txt])=>`<li>${t?`<span class="bench-t">${esc(t)}</span>`:''}<span>${esc(txt)}</span></li>`).join('')}</ul><p class="bench-note"><b>Power-Spike:</b> ${esc(bm.spike)}</p><p class="bench-note"><b>Roaming:</b> ${esc(bm.roam)}</p></div>`;
   return`<section class="card role-card side-${ours}" id="rc-${r}" style="--k:${i}"><div class="rc-head"><span class="role-label">${ROLE_NAMES[r]}</span><span class="fine">${esc(state.players[i].name)}</span></div><div class="rc-vs">${portrait(a)}<span class="vs">vs</span>${portrait(e)}</div><p class="rc-names"><strong>${esc(cname(a))}</strong> vs <strong>${esc(cname(e))}</strong></p>${mu?`<p class="rc-mu">${icon('book')}<span>${esc(mu)}</span></p>`:''}${body}${bmHtml}</section>`;}).join('');
- return head('Game plan',`${esc(state.teamName)} vs ${esc(opp?.name||'Opponent')} · Patch ${esc(shortPatch(currentPatch()))}${practice?' · Practice':''}`,actions).replace('class="head-actions"','class="head-actions m-dock"')+draftTabs('plan')+renderMyPlan()+`<div class="plan-grid"><section class="card map-card">${mapSvg(ours)}</section><div class="plan-side">${win}<section class="card"><div class="card-head"><h2>Power curve</h2><span class="tag">Estimate</span></div>${renderCurve(false)}</section></div></div>${renderSW()}${renderTimeline()}${note}<h2 class="plan-sec">Per player</h2><div class="role-grid">${cards}</div>`;
+ return head('Game plan','',actions).replace('class="head-actions"','class="head-actions m-dock"')+draftTabs('plan',`${esc(state.teamName)} vs ${esc(opp?.name||'Opponent')} · Patch ${esc(shortPatch(currentPatch()))}${practice?' · Practice':''}`)+renderMyPlan()+`<div class="plan-grid"><section class="card map-card">${mapSvg(ours)}</section><div class="plan-side">${win}<section class="card"><div class="card-head"><h2>Power curve</h2><span class="tag">Estimate</span></div>${renderCurve(false)}</section></div></div>${renderSW()}${renderTimeline()}${note}<h2 class="plan-sec">Per player</h2><div class="role-grid">${cards}</div>`;
 }
 // Persönlicher Fahrplan: optional, Auswahl wird pro Gerät gemerkt. Bot-Lane = ADC + Support.
 let myRole=null;try{const v=localStorage.getItem('riftroom.myrole');if(PLAN_ROLES.includes(v))myRole=v;}catch{}

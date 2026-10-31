@@ -179,7 +179,7 @@ export const PROFILES=Object.fromEntries(lines.split('\n').map(line=>{const [id,
 // Rollen aus den Winrate-Daten: eine Rolle zählt, wenn sie mindestens 8 % der Spiele des Champions
 // und mindestens 2.000 Spiele hat. So sind Off-Rollen und neue Champions automatisch dabei.
 let META_ROLES=new Map(),CATALOG_BY_ID=new Map(),lastMeta=null,lastCatalog=null;
-export function learnRoles(meta){if(meta===lastMeta)return;lastMeta=meta;META_ROLES=new Map();if(!meta)return;const tot=new Map();for(const e of meta.entries)tot.set(e.champion,(tot.get(e.champion)||0)+e.games);for(const e of meta.entries){if(e.games>=2000&&e.games>=0.08*tot.get(e.champion)){if(!META_ROLES.has(e.champion))META_ROLES.set(e.champion,new Set());META_ROLES.get(e.champion).add(e.role);}}}
+export function learnRoles(meta){if(meta===lastMeta)return;lastMeta=meta;META_ROLES=new Map();if(!meta)return;const tot=new Map();for(const e of meta.entries)tot.set(e.champion,(tot.get(e.champion)||0)+e.games);for(const e of meta.entries){if(e.games>=500&&e.games>=0.08*tot.get(e.champion)){if(!META_ROLES.has(e.champion))META_ROLES.set(e.champion,new Set());META_ROLES.get(e.champion).add(e.role);}}}
 export function useCatalog(catalog){if(catalog===lastCatalog)return;lastCatalog=catalog;CATALOG_BY_ID=new Map((catalog?.champions||[]).map(c=>[c.id,c]));}
 const TAG_ROLE={Marksman:'BOTTOM',Support:'UTILITY',Mage:'MIDDLE',Assassin:'MIDDLE',Fighter:'TOP',Tank:'TOP'};
 // Grobe Ableitung für Champions ohne kuratiertes Profil (z. B. ganz neue). Wird als "geschätzt" markiert.

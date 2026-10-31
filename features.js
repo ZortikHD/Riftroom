@@ -40,7 +40,7 @@ export function learnTip(state,i,meta){
   }
   if(!gaps.length)return null;
   // Nur Champions, die in dieser Rolle wirklich gespielt werden (Pickrate ab 2 %), keine Off-Meta-Exoten.
-  const cands=meta.entries.filter(e=>e.role===role&&e.games>=10000&&(e.pickRate==null||e.pickRate>=2)&&!allPools.has(e.champion)).sort((a,b)=>adj(b)-adj(a));
+  const cands=meta.entries.filter(e=>e.role===role&&e.games>=2500&&(e.pickRate==null||e.pickRate>=2)&&!allPools.has(e.champion)).sort((a,b)=>adj(b)-adj(a));
   const fits={front:p=>p.front>=2,engage:p=>p.engage>=2,peel:p=>p.peel>=2,scaling:p=>p.scaling>=3,magic:p=>p.damage==='magic',physical:p=>p.damage==='physical',depth:()=>true};
   for(const g of gaps){const e=cands.find(x=>{const p=profileOf(x.champion);return p&&fits[g](p);});if(e)return{id:e.champion,wr:e.wins/e.games*100,games:e.games,reason:REASON[g]};}
   return null;
@@ -91,7 +91,7 @@ export function aiBan(state,meta,taken,rand=Math.random){
   // Der Computer bannt gern eure Comfort-Picks, sonst starke Meta-Champions.
   const ours=roleInfo(state.allies);
   const comfort=state.players.flatMap((p,i)=>state.allies[i]?[]:p.pool.filter(v=>v.comfort>=4).map(v=>({id:v.id,score:1+v.comfort/10})));
-  const strong=meta?[...new Map(meta.entries.filter(e=>e.games>=10000).map(e=>[e.champion,e])).values()].map(e=>({id:e.champion,score:(adj(e)-0.5)*20+(e.banRate||0)/20})):[];
+  const strong=meta?[...new Map(meta.entries.filter(e=>e.games>=2500).map(e=>[e.champion,e])).values()].map(e=>({id:e.champion,score:(adj(e)-0.5)*20+(e.banRate||0)/20})):[];
   const list=[...comfort,...strong].filter(x=>!taken.has(x.id)&&banValue(x.id,ours,meta)>=0.35).map(x=>({...x,score:x.score*banValue(x.id,ours,meta)})).sort((a,b)=>b.score-a.score);
   return pickWeighted([...new Map(list.map(x=>[x.id,x])).values()],rand)?.id||null;
 }
@@ -102,7 +102,7 @@ export function aiPick(state,meta,taken,opp,catalog,rand=Math.random){
     const role=ROLES[i],mains=opp?.players?.[i]?.champs||[];
     // Mains spielt der Computer gern, schwache aber seltener (wie ein echter Gegner, der lieber etwas Starkes nimmt).
     for(const id of mains)if(!taken.has(id)){const e=meta?.entries.find(x=>x.champion===id&&x.role===role);list.push({i,id,score:e?1.4+(adj(e)-0.5)*20:1.2});}
-    if(meta)for(const e of meta.entries)if(e.role===role&&e.games>=10000&&!taken.has(e.champion))list.push({i,id:e.champion,score:(adj(e)-0.5)*20+Math.min(e.pickRate||0,15)/15});
+    if(meta)for(const e of meta.entries)if(e.role===role&&e.games>=2500&&!taken.has(e.champion))list.push({i,id:e.champion,score:(adj(e)-0.5)*20+Math.min(e.pickRate||0,15)/15});
   }
   if(!list.length){for(const i of open)for(const c of catalog.champions)if(!taken.has(c.id)&&profileOf(c.id)?.roles.includes(ROLES[i]))list.push({i,id:c.id,score:rand()});}
   list.sort((a,b)=>b.score-a.score);

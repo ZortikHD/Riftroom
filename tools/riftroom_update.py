@@ -1,4 +1,5 @@
-# Tägliches Daten-Update: Katalog (Riot Data Dragon), Winrates und Best in Slot (Lolalytics).
+# Tägliches Daten-Update: Katalog (Riot Data Dragon), Winrates (Master+) und Best in Slot (Lolalytics).
+# Master+ hat rund ein Viertel der Spiele von Emerald+; die Mindest-Spielzahlen in der App sind darauf abgestimmt.
 # Aufruf: python3 -I riftroom_update.py <ausgabeordner>
 import json, sys, time, os, re, urllib.request, urllib.error
 from datetime import datetime, timezone
@@ -23,7 +24,7 @@ champions = [{'id': c['id'], 'key': c['key'], 'name': c['name'], 'title': c['tit
 catalog = {'version': ver, 'fetchedAt': now(), 'champions': champions}
 id_by_key = {str(c['key']): c['id'] for c in champions}
 LANES = {'top': 'TOP', 'jungle': 'JUNGLE', 'middle': 'MIDDLE', 'bottom': 'BOTTOM', 'support': 'UTILITY'}
-def lane_data(patch, lane, tier='emerald_plus'):
+def lane_data(patch, lane, tier='master_plus'):
     url = f'https://a1.lolalytics.com/mega/?ep=list&v=1&patch={patch}&tier={tier}&queue=ranked&region=all&lane={lane}'
     try:
         d = get(url)
@@ -44,7 +45,7 @@ def build(patch):
         matches = max(matches, int(d.get('analysed') or 0))
         for key, v in d['cid'].items():
             cid = id_by_key.get(str(key)); games = round(float(v.get('games') or 0)); wr = float(v.get('wr') or 0)
-            if not cid or v.get('lane') != lane or games < 300 or not (0 < wr < 100): continue
+            if not cid or v.get('lane') != lane or games < 150 or not (0 < wr < 100): continue
             e = {'champion': cid, 'role': role, 'games': games, 'wins': min(games, max(0, round(games * wr / 100)))}
             if v.get('pr') is not None and 0 <= float(v['pr']) <= 100: e['pickRate'] = float(v['pr'])
             if v.get('br') is not None and 0 <= float(v['br']) <= 100: e['banRate'] = float(v['br'])
@@ -53,7 +54,7 @@ def build(patch):
     if len(entries) <= 100: raise NoData(f'zu wenige Zeilen fuer {patch} ({len(entries)})')
     matches = max([matches] + [e['games'] for e in entries])
     return {'schemaVersion': 1, 'source': 'Lolalytics (inoffizielle Abfrage, nicht von Riot)', 'patch': patch,
-            'updatedAt': now(), 'region': 'Global', 'rank': 'Emerald+',
+            'updatedAt': now(), 'region': 'Global', 'rank': 'Master+',
             'queue': 'Ranked Solo/Duo', 'matches': matches, 'entries': entries}
 def try_build(patch):
     try: return build(patch), ''

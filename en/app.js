@@ -1039,7 +1039,7 @@ function pickerSections(type,index,blocked){
  const free=ids=>[...new Set(ids)].filter(id=>champ(id)&&!blocked.has(id));
  const byId=new Map(catalog.champions.map(c=>[c.id,c]));
  const st=status(),meta=st.ok?state.meta:null;
- const strong=role=>meta?meta.entries.filter(e=>e.role===role&&e.games>=10000).sort((a,b)=>(b.wins+100)/(b.games+200)-(a.wins+100)/(a.games+200)).map(e=>e.champion):[];
+ const strong=role=>meta?meta.entries.filter(e=>e.role===role&&e.games>=2500).sort((a,b)=>(b.wins+100)/(b.games+200)-(a.wins+100)/(a.games+200)).map(e=>e.champion):[];
  const opp=activeOpp();
  if(type==='allies'){
   const p=state.players[index];

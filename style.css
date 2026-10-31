@@ -826,10 +826,9 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;opa
 .cs-row.active{box-shadow:0 0 0 1px var(--side),0 0 24px -6px var(--side)}
 
 /* Fokus-Elemente sanft einblenden beim Seitenwechsel */
-.page.enter>*{animation:page-in .35s both cubic-bezier(.2,.8,.2,1)}
+.page.enter>*{animation:page-in .35s backwards cubic-bezier(.2,.8,.2,1)}
 .page.enter>*:nth-child(2){animation-delay:.04s}.page.enter>*:nth-child(3){animation-delay:.08s}.page.enter>*:nth-child(4){animation-delay:.12s}
 @keyframes page-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-.page.enter>*{}
 @media (prefers-reduced-motion:reduce){.page.enter>*,.ds-strip{animation:none}}
 
 /* ================= Startanimation ================= */
@@ -1578,3 +1577,18 @@ html.calm-splash #splash.out{transform:none;filter:none}
 .page-head .sub{max-width:68ch;color:var(--muted)}
 .head-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 @media (max-width:700px){.page-head{align-items:flex-start}.head-actions{width:100%}}
+/* Navigation: Minispiele im Hauptmenü, am Handy kurze Beschriftung. Draft und Spielplan als Reiter. */
+.tab-short{display:none}
+@media (max-width:520px){.tab-full{display:none}.tab-short{display:inline}}
+.draft-tabs{margin-top:-6px}
+/* Handy: Aktionen nach dem Draft und auf dem Spielplan als feste Leiste unten. */
+@media (max-width:700px){
+ .head-actions.m-dock{position:fixed;left:0;right:0;bottom:0;z-index:40;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding:10px 16px calc(10px + env(safe-area-inset-bottom));background:color-mix(in srgb,var(--bg) 90%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid var(--line)}
+ .head-actions.m-dock .btn{flex:none}
+ .page:has(.m-dock){padding-bottom:96px}
+}
+@media (max-width:520px){.tab{padding:12px 9px}}
+@media (max-width:420px){.tab{padding:12px 7px}}
+@media (max-width:380px){.tab{padding:12px 6px;font-size:14px}}
+@media (max-width:340px){.tab{padding:12px 5px;font-size:13px}}
+@media (max-width:360px){.cs-ban{width:25px;height:25px}.cs-ban-row{gap:2px}}

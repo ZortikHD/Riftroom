@@ -13,11 +13,12 @@ export const guide={
 
 export const TOURS={
  welcome:[
-  {page:'draft',sel:'.tabs',title:'Welcome to Riftroom',text:'Riftroom helps your team prepare drafts together. At the top you find the four areas you really need.'},
+  {page:'draft',sel:'.tabs',title:'Welcome to Riftroom',text:'Riftroom helps your team prepare drafts together. At the top you find every area you need.'},
   {sel:'.tab[data-page="team"]',title:'1 · Team',text:'This is where you add your players and their champion pools. Everything else is based on this.'},
   {sel:'.tab[data-page="opponents"]',title:'2 · Opponents',text:'Optional: notes and favorite champions of your opponents. Riftroom then suggests fitting bans.'},
   {sel:'.tab[data-page="meta"]',title:'3 · Meta',text:'Current win rates and ban suggestions for the patch. Check here when a new patch drops.'},
-  {sel:'.more>summary',title:'Everything else',text:'Results, minigame and your backup are under “More” to keep the top bar tidy.'},
+  {sel:'.tab[data-page="mini"]',title:'Mini games',text:'Counter puzzle, macro quiz, champion guessing and more, solo or with friends in a lobby.'},
+  {sel:'.more>summary',title:'Everything else',text:'Your results and your backup are under “More”.'},
   {sel:'[data-action="draft-open"]',title:'4 · Draft',text:'Start the draft here just like champ select, for real or as practice against the computer.'},
   {sel:'.cl-list li.next',title:'Your next step',text:'The glowing item in the checklist is always what you should focus on next. “Show me” takes you right there.'},
  ],

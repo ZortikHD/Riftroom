@@ -66,8 +66,8 @@ const miniCtx={catalog:()=>catalog,esc:v=>esc(v),portrait:id=>portrait(id,'av'),
 const setMiniTab=t=>{miniTab=t;try{localStorage.setItem('riftroom.minitab',t);}catch{}if(page==='mini'){render();window.scrollTo({top:0,behavior:'instant'});}};
 const lbCtx={esc:v=>esc(v),LOADING,SQUARE,icon:n=>icon(n),toast:(m,e)=>toast(m,e),burst:(h,n)=>burst(h,n),standalone:STANDALONE,rerender:()=>{if(page==='mini')render();},setTab:setMiniTab,tab:()=>miniTab,page:()=>page,pz:pzCtx,mg:miniCtx};
 if(STANDALONE)setSupabase(()=>loadSb());
-const MAIN_PAGES={draft:'Draft',team:'Team',opponents:'Opponents',meta:'Meta'};
-const MORE_PAGES={games:'Results',mini:'Mini games',settings:'Data & Backup'};
+const MAIN_PAGES={draft:'Draft',team:'Team',opponents:'Opponents',meta:'Meta',mini:'Mini games'};
+const MORE_PAGES={games:'Results',settings:'Data & Backup'};
 const PAGES={...MAIN_PAGES,...MORE_PAGES};
 const META_TABS=[['pool','Your Pool'],['bans','Bans'],['trends','Trends'],['all','All Champions']];
 
@@ -178,7 +178,8 @@ function render(){
  const st=status(),m=state.meta;
  const newPatch=m&&catalog&&state.seenPatch!==shortPatch(catalog.version);
  const inMore=page in MORE_PAGES;
- const nav=Object.entries(MAIN_PAGES).map(([k,l])=>`<button class="tab ${page===k?'on':''}" data-page="${k}" ${page===k?'aria-current="page"':''}>${l}${k==='meta'&&newPatch?'<span class="new-dot" title="Neuer Patch"></span>':''}</button>`).join('')
+ const navOn=k=>page===k||(k==='draft'&&page==='plan');
+ const nav=Object.entries(MAIN_PAGES).map(([k,l])=>`<button class="tab ${navOn(k)?'on':''}" data-page="${k}" ${navOn(k)?'aria-current="page"':''}>${k==='mini'?`<span class="tab-full">${l}</span><span class="tab-short">Games</span>`:l}${k==='meta'&&newPatch?'<span class="new-dot" title="Neuer Patch"></span>':''}</button>`).join('')
   +`<details class="more"><summary class="tab ${inMore?'on':''}">${inMore?`<span class="more-full">${MORE_PAGES[page]}</span><span class="more-short">More</span>`:'More'}<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5"/></svg></summary><div class="more-menu">${Object.entries(MORE_PAGES).map(([k,l])=>`<button class="more-item ${page===k?'on':''}" data-page="${k}" ${page===k?'aria-current="page"':''}>${l}</button>`).join('')}</div></details>`;
  const chip=st.ok?`<span class="chip ok" title="Win rates from ${esc(m.source)}, as of ${date(m.updatedAt)}"><span class="dot"></span>Patch ${esc(shortPatch(currentPatch()))}${st.fallback?` · Winrates ${esc(shortPatch(m.patch))}`:''}</span>`:`<span class="chip" title="${refreshMessage.startsWith('Offline')?esc(refreshMessage):''}"><span class="dot"></span>${m?esc(st.label):refreshMessage.startsWith('Offline')?'Offline':'No win rates'}</span>`;
  const views={plan:renderPlan,draft:renderDraft,meta:renderMeta,opponents:renderOpponents,team:renderTeam,games:renderGames,mini:renderMiniPage,settings:renderSettings};
@@ -213,7 +214,7 @@ function renderDraft(){
  const opp=activeOpp(),aiTurn=practice&&c&&c.who==='them';
  // Kopf
  const sub=`${state.side==='red'?'Red':'Blue'} side · vs ${esc(opp?.name||(practice?'the computer':'Opponent'))}${practice?' · Practice':''}${state.fearless?` · Fearless game ${state.fearless.game}`:''}`;
- const actions=(t.finished?`<button class="btn small primary" data-page="plan">${icon('map')}Game plan</button><button class="btn small" data-action="copy-discord">${icon('copy')}For Discord</button>${practice?'':'<button class="btn small" data-action="log-game">Log game</button>'}`:'')
+ const actions=(t.finished?`<button class="btn small" data-action="copy-discord">${icon('copy')}For Discord</button>${practice?'':'<button class="btn small primary" data-action="log-game">Log game</button>'}`:'')
   +(!practice&&undoStack.length&&!t.finished?`<button class="btn small" data-action="undo">${icon('back')}Undo</button>`:'')
   +`<button class="btn ghost small" data-action="draft-end">${t.finished?'New draft':practice?'End practice':'Cancel'}</button>`;
  // Phase
@@ -230,7 +231,7 @@ function renderDraft(){
  // Bans
  const ban=i=>{const id=state.bans[i],act=tgt?.type==='bans'&&tgt.index===i;return`<span class="cs-ban ${id?'filled':''} ${id==='none'?'none':''} ${act?'active':''} ${isNew('bans',i)?'just':''}" title="${id?esc(cname(id)):act?'Ban in progress':'Ban '+(i%5+1)}">${id==='none'?'<span class="no-ban">–</span>':id?portrait(id,''):act&&hoverId?`<img class="ghost" src="${SQUARE[hoverId]||'icon.svg'}" alt="">`:''}</span>`;};
  const bans=`<div class="cs-bans"><div class="cs-ban-row side-${ours}">${[0,1,2,3,4].map(ban).join('')}</div><span class="fine">Bans</span><div class="cs-ban-row side-${theirs} rev">${[5,6,7,8,9].map(ban).join('')}</div></div>`;
- const html=head('Draft',sub,actions)+phase+bans+flUsedHtml()+`<div class="cs-grid-wrap">${teamColumn('allies',ours,tgt,t)}${renderCenter(t,c,tgt,aiTurn)}${teamColumn('enemies',theirs,tgt,t)}</div>`+renderDraftExtras();
+ const html=head('Draft',sub,actions).replace('class="head-actions"',t.finished?'class="head-actions m-dock"':'class="head-actions"')+draftTabs('draft')+phase+bans+flUsedHtml()+`<div class="cs-grid-wrap">${teamColumn('allies',ours,tgt,t)}${renderCenter(t,c,tgt,aiTurn)}${teamColumn('enemies',theirs,tgt,t)}</div>`+renderDraftExtras();
  lastBoard={allies:[...state.allies],enemies:[...state.enemies],bans:[...state.bans]};lastComp=composition(state.allies);
  return html;
 }
@@ -604,9 +605,11 @@ function mapSvg(ours){
   ${state.enemies.map((id,i)=>tok(id,theirs,i,i+5,false)).join('')}${state.allies.map((id,i)=>tok(id,ours,i,i,true)).join('')}
  </svg>`;
 }
+// Draft und Spielplan gehören zusammen: zwei Reiter direkt unter dem Seitenkopf.
+const draftTabs=on=>`<div class="subtabs draft-tabs" role="tablist"><button role="tab" data-page="draft" aria-selected="${on==='draft'}">Champ Select</button><button role="tab" data-page="plan" aria-selected="${on==='plan'}">Game plan</button></div>`;
 function renderPlan(){
- const back=`<button class="btn small" data-page="draft">${icon('back')}Back to draft</button>`;
- if(!(state.allies.every(Boolean)&&state.enemies.every(Boolean)))return head('Game plan','The game plan appears once all ten champions are set.',back)+`<section class="card empty"><p>Set all picks for both teams first.</p><button class="btn primary" data-page="draft">To the draft</button></section>`;
+ const back='';
+ if(!(state.allies.every(Boolean)&&state.enemies.every(Boolean)))return head('Game plan','The game plan appears once all ten champions are set.',back)+draftTabs('plan')+`<section class="card empty"><p>Set all picks for both teams first.</p><button class="btn primary" data-page="draft">To the draft</button></section>`;
  const key=draftKey();let n=planNotes.get(key);
  if(!n){if(STANDALONE)n={status:'off'};else{n={status:'loading',pending:true};setTimeout(()=>generatePlan(key),0);}planNotes.set(key,n);}
  const ours=state.draftMode==='tournament'&&state.side==='red'?'red':'blue',opp=activeOpp();
@@ -622,7 +625,7 @@ function renderPlan(){
   const when=(ai?.wann||[]).map(x=>{const m=x.match(/^\s*(ca\.\s*)?(\d{1,2}:\d{2}(?:\s*[–-]\s*\d{1,2}:\d{2})?)\s*[–:-]?\s*(.*)$/);return m?[m[2].replace(/\s+/g,''),m[3]]:['',x];});
   const bmHtml=`<div class="bench"><h4>Your benchmarks</h4><ul class="bench-list">${[...bm.items,...when].map(([t,txt])=>`<li>${t?`<span class="bench-t">${esc(t)}</span>`:''}<span>${esc(txt)}</span></li>`).join('')}</ul><p class="bench-note"><b>Power-Spike:</b> ${esc(bm.spike)}</p><p class="bench-note"><b>Roaming:</b> ${esc(bm.roam)}</p></div>`;
   return`<section class="card role-card side-${ours}" id="rc-${r}" style="--k:${i}"><div class="rc-head"><span class="role-label">${ROLE_NAMES[r]}</span><span class="fine">${esc(state.players[i].name)}</span></div><div class="rc-vs">${portrait(a)}<span class="vs">vs</span>${portrait(e)}</div><p class="rc-names"><strong>${esc(cname(a))}</strong> vs <strong>${esc(cname(e))}</strong></p>${mu?`<p class="rc-mu">${icon('book')}<span>${esc(mu)}</span></p>`:''}${body}${bmHtml}</section>`;}).join('');
- return head('Game plan',`${esc(state.teamName)} vs ${esc(opp?.name||'Opponent')} · Patch ${esc(shortPatch(currentPatch()))}${practice?' · Practice':''}`,actions)+renderMyPlan()+`<div class="plan-grid"><section class="card map-card">${mapSvg(ours)}</section><div class="plan-side">${win}<section class="card"><div class="card-head"><h2>Power curve</h2><span class="tag">Estimate</span></div>${renderCurve(false)}</section></div></div>${renderSW()}${renderTimeline()}${note}<h2 class="plan-sec">Per player</h2><div class="role-grid">${cards}</div>`;
+ return head('Game plan',`${esc(state.teamName)} vs ${esc(opp?.name||'Opponent')} · Patch ${esc(shortPatch(currentPatch()))}${practice?' · Practice':''}`,actions).replace('class="head-actions"','class="head-actions m-dock"')+draftTabs('plan')+renderMyPlan()+`<div class="plan-grid"><section class="card map-card">${mapSvg(ours)}</section><div class="plan-side">${win}<section class="card"><div class="card-head"><h2>Power curve</h2><span class="tag">Estimate</span></div>${renderCurve(false)}</section></div></div>${renderSW()}${renderTimeline()}${note}<h2 class="plan-sec">Per player</h2><div class="role-grid">${cards}</div>`;
 }
 // Persönlicher Fahrplan: optional, Auswahl wird pro Gerät gemerkt. Bot-Lane = ADC + Support.
 let myRole=null;try{const v=localStorage.getItem('riftroom.myrole');if(PLAN_ROLES.includes(v))myRole=v;}catch{}

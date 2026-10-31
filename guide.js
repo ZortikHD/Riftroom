@@ -13,11 +13,12 @@ export const guide={
 
 export const TOURS={
  welcome:[
-  {page:'draft',sel:'.tabs',title:'Willkommen bei Riftroom',text:'Riftroom hilft eurem Team, Drafts gemeinsam vorzubereiten. Oben findest du die vier Bereiche, die ihr wirklich braucht.'},
+  {page:'draft',sel:'.tabs',title:'Willkommen bei Riftroom',text:'Riftroom hilft eurem Team, Drafts gemeinsam vorzubereiten. Oben findest du alle Bereiche, die ihr braucht.'},
   {sel:'.tab[data-page="team"]',title:'1 · Team',text:'Hier tragt ihr eure Spieler und ihre Champion-Pools ein. Das ist die Grundlage für alle Empfehlungen.'},
   {sel:'.tab[data-page="opponents"]',title:'2 · Gegner',text:'Optional: Notizen und Lieblingschampions eurer Gegner. Riftroom schlägt dann passende Bans vor.'},
   {sel:'.tab[data-page="meta"]',title:'3 · Meta',text:'Aktuelle Winrates und Ban-Vorschläge zum Patch. Schau hier rein, wenn ein neuer Patch kommt.'},
-  {sel:'.more>summary',title:'Alles andere',text:'Ergebnisse, Minispiel und eure Datensicherung liegen unter „Mehr“, damit es oben übersichtlich bleibt.'},
+  {sel:'.tab[data-page="mini"]',title:'Minispiele',text:'Counter-Puzzle, Macro-Quiz, Champion raten und mehr, allein oder mit Freunden in einer Lobby.'},
+  {sel:'.more>summary',title:'Alles andere',text:'Eure Ergebnisse und die Datensicherung liegen unter „Mehr“.'},
   {sel:'[data-action="draft-open"]',title:'4 · Draft',text:'Hier startet ihr den Draft wie im Champ Select, echt oder als Übung gegen den Computer.'},
   {sel:'.cl-list li.next',title:'Dein nächster Schritt',text:'Der leuchtende Punkt in der Startliste ist immer das, worauf du dich als Nächstes konzentrieren solltest. „Zeig mir“ führt dich direkt hin.'},
  ],

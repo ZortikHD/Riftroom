@@ -434,8 +434,8 @@ dialog[open]::backdrop{animation:fadeIn .2s}
 .cv-hit:hover{fill:var(--raised);fill-opacity:.35}
 .cv-table{margin-top:8px;font-size:13px}
 .cv-table td,.cv-table th{padding:6px 8px}
-.curve .cv-line{stroke-dasharray:400;animation:draw .9s cubic-bezier(.2,.8,.2,1) both}
-@keyframes draw{from{stroke-dashoffset:400}to{stroke-dashoffset:0}}
+.curve .cv-line{stroke-dasharray:100;animation:draw .9s cubic-bezier(.2,.8,.2,1) both}
+@keyframes draw{from{stroke-dashoffset:100}to{stroke-dashoffset:0}}
 
 /* ---------- Spielplan ---------- */
 .plan-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:20px;align-items:start}
@@ -1618,3 +1618,13 @@ html.calm-splash #splash.out{transform:none;filter:none}
 .ds-eyebrow{font:600 12px var(--f-body);letter-spacing:.14em;text-transform:uppercase;color:var(--accent);padding:4px 10px;border-radius:999px;border:1px solid rgba(198,243,107,.35);background:rgba(198,243,107,.07)}
 @media (max-width:700px){.ds-hero{grid-template-columns:1fr;min-height:340px}.ds-side{display:none}.ds-mosaic{width:50%;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:0 8px}.ds-mosaic .ds-col:nth-child(4){display:none}.ds-strip img{margin-bottom:8px}.ds-mid{padding:44px 20px}.ds-mid h1{font-size:34px}}
 @media (max-width:360px){.ds-eyebrow{font-size:10px}.ds-mid h1{font-size:30px}}
+/* Hauptblöcke jeder Seite: gleicher Abstand wie früher (seit dem Live-Raum-Wrapper fehlte er, Karten klebten aneinander). */
+.page-body{display:flex;flex-direction:column;gap:20px;min-width:0}
+.page-body>*{min-width:0}
+.page-body>.checklist{margin-top:0}
+.page-body>.game-hub{margin-bottom:0}
+.page-body>.cs-bans{margin-top:-8px}
+.meter-top{flex-wrap:wrap;row-gap:0;min-width:0}
+/* Handy: Gegner-Flex-Hinweis einzeilig, Plätze etwas höher, damit Name und Rolle nicht unter die Knöpfe oben rutschen. */
+@media (max-width:700px){.flex-note{white-space:nowrap;overflow:hidden;max-width:100%}.cs-row,.cs-team.theirs .cs-row{min-height:104px}}
+@media (max-width:860px){.meter-top{flex-direction:column;align-items:flex-start;gap:0}}

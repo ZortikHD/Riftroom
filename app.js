@@ -185,7 +185,7 @@ function render(){
  app.innerHTML=`<header class="top"><div class="top-in"><button class="brand" data-page="draft"><img src="icon.svg" alt="">Riftroom</button><nav class="tabs" aria-label="Hauptnavigation">${nav}</nav><div class="top-right">${chip}${installEvt?`<button class="install-btn" data-action="install" title="Riftroom als App installieren">${icon('download')}<span>App</span></button>`:''}<button class="lang-btn" data-action="lang" title="Switch to English" aria-label="Sprache: Deutsch. Auf Englisch umstellen">EN</button><button class="help-btn" data-action="tour" title="Einführung ansehen" aria-label="Einführung ansehen">?</button></div></div></header>
  <main class="page ${page!==lastPageRendered?'enter':''}">${bannerHtml()}${roomBarHtml()}<div class="page-body ${room?.role==='viewer'?'viewer':''}" ${viewerLocked()?'inert':''}>${views[page]()}</div></main>
  <footer class="foot"><div class="foot-in">Fan-Projekt. Riot Games does not endorse or sponsor this project. <button class="link" data-page="settings">Datenquellen und Rechtliches</button></div></footer>`;
- placeTabInk();decorateEmpty();
+ placeTabInk();decorateEmpty();fitCurves();
  if($('#confirm-dialog').open&&$('#confirm-dialog [data-riot-res]'))riotRepaint();
  lastPageRendered=page;
  if(page==='mini'&&miniTab==='guess')mountMini(miniCtx);
@@ -550,22 +550,37 @@ function showMatchupDialog(id){
 }
 
 /* ---------- Stärkekurve ---------- */
-function renderCurve(compact){
+// Die Kurve wird in genau der Breite gezeichnet, die sie auf dem Bildschirm hat (fitCurves), damit die Schrift nicht mitwächst.
+function curveSvg(compact,W){
  const a=phaseCurve(state.allies),b=phaseCurve(state.enemies);
  const ours=state.draftMode==='tournament'&&state.side==='red'?'red':'blue',theirs=ours==='red'?'blue':'red';
- // Wertebereich eng um die Daten, damit Unterschiede sichtbar werden (Linien, keine Flächen).
- const W=compact?320:520,H=compact?132:190,L=14,R=compact?74:96,T=12,B=26,lo=Math.max(0,Math.min(...a,...b)-1.5),hi=Math.max(...a,...b,1)+1.5;
- const x=i=>L+i*(W-L-R)/2,y=v=>T+(1-(v-lo)/(hi-lo))*(H-T-B);
- const line=(v,cls)=>`<polyline class="cv-line ${cls}" points="${v.map((p,i)=>`${x(i)},${y(p)}`).join(' ')}"/>`+v.map((p,i)=>`<circle class="cv-dot ${cls}" cx="${x(i)}" cy="${y(p)}" r="4"/>`).join('');
  const nameA=esc(state.teamName).slice(0,14),nameB=esc(activeOpp()?.name||'Gegner').slice(0,14);
+ // Wertebereich eng um die Daten, damit Unterschiede sichtbar werden (Linien, keine Flächen).
+ const H=compact?150:190,L=24,R=26+Math.max(nameA.length,nameB.length)*7,T=12,B=26,lo=Math.max(0,Math.min(...a,...b)-1.5),hi=Math.max(...a,...b,1)+1.5;
+ const x=i=>L+i*(W-L-R)/2,y=v=>T+(1-(v-lo)/(hi-lo))*(H-T-B);
+ const line=(v,cls)=>`<polyline class="cv-line ${cls}" pathLength="100" points="${v.map((p,i)=>`${x(i)},${y(p)}`).join(' ')}"/>`+v.map((p,i)=>`<circle class="cv-dot ${cls}" cx="${x(i)}" cy="${y(p)}" r="4"/>`).join('');
  let ya=y(a[2]),yb=y(b[2]);if(Math.abs(ya-yb)<13){const mid=(ya+yb)/2;ya=mid+(ya<=yb?-7:7);yb=mid+(ya<=yb?7:-7);}
  const hits=PHASES.map((p,i)=>`<rect class="cv-hit" x="${x(i)-26}" y="${T}" width="52" height="${H-T-B}"><title>${p} (${PHASE_TIME[i]}): ${nameA} ${String(a[i]).replace('.',',')} · ${nameB} ${String(b[i]).replace('.',',')}</title></rect>`).join('');
- const svg=`<svg class="curve" viewBox="0 0 ${W} ${H}" role="img" aria-label="Geschätzte Stärke beider Teams in früher, mittlerer und später Spielphase">
+ const svg=`<svg class="curve" data-compact="${compact?1:0}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Geschätzte Stärke beider Teams in früher, mittlerer und später Spielphase">
   ${[0,.5,1].map(f=>`<line class="cv-grid" x1="${L}" x2="${W-R+6}" y1="${T+f*(H-T-B)}" y2="${T+f*(H-T-B)}"/>`).join('')}
   ${PHASES.map((p,i)=>`<text class="cv-x" x="${x(i)}" y="${H-8}" text-anchor="middle">${p}</text>`).join('')}
   ${line(b,'c-'+theirs)}${line(a,'c-'+ours)}
   <text class="cv-lab" x="${x(2)+10}" y="${ya+4}">${nameA}</text><text class="cv-lab" x="${x(2)+10}" y="${yb+4}">${nameB}</text>
   ${hits}</svg>`;
+ return svg;
+}
+function fitCurves(){
+ for(const el of document.querySelectorAll('svg.curve[data-compact]')){
+  const w=Math.round(el.parentElement.clientWidth),vb=+el.viewBox.baseVal.width;
+  if(w>=240&&Math.abs(w-vb)>8)el.outerHTML=curveSvg(el.dataset.compact==='1',w);
+ }
+}
+let fitTimer=null;addEventListener('resize',()=>{clearTimeout(fitTimer);fitTimer=setTimeout(fitCurves,150);});
+function renderCurve(compact){
+ const a=phaseCurve(state.allies),b=phaseCurve(state.enemies);
+ const ours=state.draftMode==='tournament'&&state.side==='red'?'red':'blue',theirs=ours==='red'?'blue':'red';
+ const nameA=esc(state.teamName).slice(0,14),nameB=esc(activeOpp()?.name||'Gegner').slice(0,14);
+ const svg=curveSvg(compact,compact?320:520);
  const legend=`<div class="cv-legend"><span><i class="c-${ours}"></i>${nameA}</span><span><i class="c-${theirs}"></i>${nameB}</span></div>`;
  const table=compact?'':`<details class="rec-more"><summary>Werte als Tabelle</summary><table class="cv-table"><thead><tr><th>Phase</th><th class="r">${nameA}</th><th class="r">${nameB}</th></tr></thead><tbody>${PHASES.map((p,i)=>`<tr><td>${p} <span class="muted">${PHASE_TIME[i]}</span></td><td class="r">${String(a[i]).replace('.',',')}</td><td class="r">${String(b[i]).replace('.',',')}</td></tr>`).join('')}</tbody></table></details>`;
  return`<p class="cv-sum">${curveSummary(a,b)}</p>${legend}${svg}<p class="fine">Grobe Schätzung aus den Champion-Profilen (Scaling und Engage), keine gemessenen Werte.</p>${table}`;

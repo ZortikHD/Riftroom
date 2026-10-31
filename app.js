@@ -60,7 +60,7 @@ const pzCtx={friendsBtn:g=>`<button class="btn pz-friends" data-lobby-new="${g}"
 function renderMiniPage(){
  const st=miniStats();
  const tiles=`<div class="game-hub" role="tablist" aria-label="Minispiele">${MINI_GAMES.map(([k,l,art,sub],i)=>`<button class="game-tile ${miniTab===k?'on':''} ${k==='lobby'?'mp':''}" role="tab" aria-selected="${miniTab===k}" data-minitab="${k}" style="--i:${i}"><img src="${LOADING[art]}" alt=""><span class="gt-text"><b>${l}</b><small>${k==='lobby'&&lobbyInfo()?'Lobby '+esc(lobbyInfo()):st[k]?esc(st[k]):sub}</small></span>${k==='daily'&&st.daily!=='Erledigt'?'<i class="gt-new">Neu</i>':''}</button>`).join('')}</div>`;
- return tiles+(miniTab==='guess'?renderMini(miniCtx):miniTab==='lobby'?renderLobby(lbCtx):renderPuzzle(miniTab,pzCtx));
+ return head('Minispiele','Draft-Wissen trainieren, allein oder mit Freunden in einer Lobby.')+tiles+(miniTab==='guess'?renderMini(miniCtx):miniTab==='lobby'?renderLobby(lbCtx):renderPuzzle(miniTab,pzCtx));
 }
 const miniCtx={catalog:()=>catalog,esc:v=>esc(v),portrait:id=>portrait(id,'av'),toast:(m,e)=>toast(m,e),rerender:()=>{if(page==='mini')render();}};
 const setMiniTab=t=>{miniTab=t;try{localStorage.setItem('riftroom.minitab',t);}catch{}if(page==='mini'){render();window.scrollTo({top:0,behavior:'instant'});}};
@@ -422,7 +422,7 @@ function dsSide(side){
 function renderDraftStart(){
  if(room?.role==='viewer')return`<section class="card empty room-wait"><h2>Warte auf den Draft</h2><p>Sobald ${esc(state.teamName)} den Draft startet, siehst du hier jeden Ban und Pick live.</p></section>`;
  const intro=renderChecklist();
- return`<section class="ds-hero">${dsSide('blue')}${dsSide('red')}<div class="ds-side blue"><span>Blau</span></div><div class="ds-mid"><span class="ds-eyebrow">Champ Select · Turnier-Reihenfolge</span><h1>Bereit für den Draft?</h1><p>Abwechselnd bannen und picken, Schritt für Schritt, mit Vorschlägen für jede Rolle.</p><button class="btn primary big" data-action="draft-open">${icon('play')}Draft starten</button>${STANDALONE&&!room?`<button class="btn ds-room" data-action="room-open">${icon('users')}Live-Raum fürs Team</button>`:''}</div><div class="ds-side red"><span>Rot</span></div></section>`+intro+renderTemplates();
+ return`<section class="ds-hero">${dsSide('blue')}${dsSide('red')}<div class="ds-side blue"><span>Blau</span></div><div class="ds-mid"><span class="ds-eyebrow">Champ Select · Turnier-Reihenfolge</span><h1>Bereit für den Draft?</h1><p>Abwechselnd bannen und picken, Schritt für Schritt, mit Vorschlägen für jede Rolle.</p><button class="btn primary big" data-action="draft-open">${icon('play')}Draft starten</button>${STANDALONE&&!room?`<button class="btn ds-room" data-action="room-open">${icon('users')}Live-Raum fürs Team</button>`:''}${state.templates.length?`<div class="ds-tpls"><span>Gespeichert:</span>${state.templates.slice(-3).reverse().map(t=>`<button class="ds-tpl" data-template-load="${esc(t.id)}">${esc(t.name)}</button>`).join('')}</div>`:''}</div><div class="ds-side red"><span>Rot</span></div></section>`+intro+renderTemplates();
 }
 // Startliste: was ein neues Team der Reihe nach erledigen sollte. Der erste offene Punkt ist hervorgehoben.
 const EX_POOLS=initialState().players.map(p=>p.pool.map(v=>v.id).join());

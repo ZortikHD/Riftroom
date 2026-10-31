@@ -1725,3 +1725,49 @@ html.calm-splash #splash.out{transform:none;filter:none}
 .games-empty>.games-ghost{grid-area:ghost}
 @media (max-width:760px){.games-empty{grid-template-areas:"art" "text" "ghost"}}
 .opp-rec li .g-bar{grid-column:1/-1}
+/* Minispiele im gleichen Look wie der Rest: flacher Hauptknopf, ruhigere Titel, Plakette wie auf der Startseite */
+.mg-go span{padding:14px 36px;border-radius:var(--r-md);font:700 20px var(--f-display);letter-spacing:.06em;box-shadow:0 10px 30px -12px color-mix(in srgb,var(--accent) 60%,transparent);transition:transform .15s,box-shadow .15s,background .15s}
+.mg-go:hover span{transform:translateY(-1px);box-shadow:0 14px 34px -12px color-mix(in srgb,var(--accent) 75%,transparent)}
+.mg-go:active span{transform:translateY(1px);box-shadow:0 6px 18px -10px color-mix(in srgb,var(--accent) 60%,transparent)}
+.mg-go.small span{font-size:18px;padding:11px 28px}
+.mg-title{font:800 clamp(40px,7vw,72px)/.92 var(--f-display)}
+.mg-title span:last-child{transform:none;text-shadow:none}
+.mg-badge{transform:none;background:color-mix(in srgb,var(--accent) 8%,transparent);color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 35%,transparent);font:600 12px var(--f-body);letter-spacing:.14em;padding:4px 10px}
+.mg-bubble{opacity:.14}
+/* Handy: alle acht Spiele auf einen Blick (4×2) statt seitlich wischen */
+@media (max-width:700px){
+ .page-body>.game-hub{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;overflow:visible;margin:0;padding:0}
+ .game-hub .game-tile{flex:none;min-height:66px;border-radius:var(--r-md)}
+ .game-hub .gt-text{padding:6px 7px}
+ .game-hub .gt-text b{font-size:11px;line-height:1.05;letter-spacing:0;overflow-wrap:anywhere}
+ .game-hub .gt-text small{display:none}
+ .game-hub .gt-new{top:4px;right:4px;font-size:8px;padding:2px 4px}
+}
+/* Lobby: Spielauswahl als schlichte Chips statt einer zweiten Kachelreihe */
+.lb-games{display:flex;flex-wrap:wrap;justify-content:center;gap:6px}
+.lb-game{height:auto;min-height:0;padding:5px 12px 5px 5px;border-radius:999px;align-items:center;gap:8px;background:var(--raised)}
+.lb-game img{position:static;width:26px;height:26px;border-radius:50%;opacity:1}
+.lb-game::after{display:none}
+.lb-game b{padding:0;font:600 13px var(--f-body);text-transform:none}
+.lb-game:not(:disabled):hover{transform:none;border-color:var(--line-strong)}
+.lb-game.on{background:var(--accent-soft)}
+/* Dialoge: Kopf mit Trennlinie, Aktionen als feste Fußzeile, gleiche Ecken wie große Karten */
+dialog{padding:0;border-radius:var(--r-xl);overflow:auto}
+dialog>*:not(.dlg-head):not(.dlg-actions){margin-left:22px;margin-right:22px}
+.dlg-head{position:sticky;top:0;z-index:2;margin:0 0 16px;padding:18px 22px 14px;background:var(--surface);border-bottom:1px solid var(--line)}
+.dlg-head h2{font-size:24px}
+.dlg-actions{position:sticky;bottom:0;margin:18px 0 0;padding:14px 22px;background:var(--surface);border-top:1px solid var(--line)}
+dialog>:last-child:not(.dlg-actions){margin-bottom:22px}
+@media (max-width:520px){.dlg-actions .btn{flex:1}}
+/* Draft-Start: gespeicherte Drafts direkt erreichbar */
+.ds-tpls{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:6px;margin-top:4px;font-size:13px;color:var(--muted)}
+.ds-tpl{max-width:180px;padding:4px 10px;border-radius:999px;border:1px solid var(--line-strong);background:color-mix(in srgb,var(--bg) 70%,transparent);color:var(--text);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ds-tpl:hover{border-color:var(--accent)}
+/* Startliste kompakter: am PC vier Schritte nebeneinander */
+@media (min-width:900px){
+ .cl-list{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+ .cl-list li{flex-direction:column;align-items:flex-start;gap:8px;padding:12px}
+ .cl-list li .btn{margin-top:auto}
+ .cl-text .fine{display:block}
+}
+@media (max-width:899px){.cl-list li.done .cl-text .fine{display:none}.cl-list li.done{padding-top:8px;padding-bottom:8px}}

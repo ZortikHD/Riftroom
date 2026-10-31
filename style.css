@@ -1639,3 +1639,46 @@ html.calm-splash #splash.out{transform:none;filter:none}
 .cs-sum-part .meter-top{flex-direction:column;align-items:flex-start;gap:0}
 .cs-phase.done .steps{display:none}
 @media (max-width:700px){.cs-phase .steps{display:none}.draft-sub{padding-bottom:8px;font-size:13px}}
+/* Team: Sicherheit als kompakte Leiste unter dem Namen statt fünf großer Knöpfe */
+.pool-item{grid-template-columns:28px minmax(0,1fr) auto;grid-template-areas:"av name x" "av comf x";gap:2px 10px;padding:8px 0}
+.pool-item>img.av,.pool-item>.av{grid-area:av}
+.pool-item>.pool-name{grid-area:name;align-self:end;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pool-item>.icon-btn{grid-area:x}
+.comfort{grid-area:comf;grid-column:auto;display:flex;gap:3px;align-self:start}
+.comfort button{position:relative;width:20px;height:16px;border:0;background:none;color:transparent;font-size:0;border-radius:var(--r-sm)}
+.comfort button::before{content:"";position:absolute;left:2px;right:2px;top:5px;height:6px;border-radius:3px;background:var(--line-strong);transition:background .15s}
+.comfort button.fill::before{background:var(--accent)}
+.comfort button:hover::before{background:color-mix(in srgb,var(--accent) 60%,var(--line-strong))}
+.comfort button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.comfort button.on{background:none}
+/* Team: Spielername als Überschrift, Rahmen erst beim Bearbeiten */
+.card.player>input[data-player-name]{height:auto;padding:4px 8px;margin:0 -8px;width:calc(100% + 16px);background:transparent;border-color:transparent;font:600 20px/1.2 var(--f-display);letter-spacing:.01em}
+.card.player>input[data-player-name]:hover{border-color:var(--line)}
+.card.player>input[data-player-name]:focus{border-color:var(--accent);background:var(--bg)}
+/* Lern-Tipp als dezente Hinweis-Kachel */
+.learn{margin-top:auto;padding:10px 12px;border:1px solid color-mix(in srgb,var(--accent) 22%,var(--line));border-radius:var(--r-md);background:color-mix(in srgb,var(--accent) 5%,transparent)}
+.learn .role-label{font-size:11px}
+.learn-row{font-size:13px}
+/* Gegner: Aufstellung als Bildleiste */
+.opp-lineup{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.ol-slot{position:relative;height:96px;border-radius:var(--r-md);overflow:hidden;border:1px solid var(--line);background:var(--bg);box-shadow:inset 0 -3px 0 var(--red)}
+.ol-slot img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 20%;opacity:.8}
+.ol-slot::after{content:"";position:absolute;inset:0;background:linear-gradient(to top,rgba(9,12,16,.95) 10%,rgba(9,12,16,.2) 70%)}
+.ol-slot.empty{box-shadow:none;border-style:dashed}
+.ol-text{position:absolute;left:8px;right:8px;bottom:8px;z-index:1;display:flex;flex-direction:column;gap:1px;min-width:0}
+.ol-text b{font:600 15px/1.1 var(--f-display);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ol-text small{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ol-text .role-label{font-size:10px}
+@media (max-width:700px){.opp-lineup{display:flex;overflow-x:auto;scrollbar-width:none;margin:0 -4px;padding:0 4px}.ol-slot{flex:none;width:112px}}
+/* Gegnerliste mit Gesichtern */
+.opp-item{justify-content:flex-start}
+.opp-item .tag{margin-left:auto}
+.opp-faces{display:flex;flex:none}
+.opp-faces img{width:22px;height:22px;border-radius:var(--r-sm);border:2px solid var(--surface);margin-left:-6px;object-fit:cover}
+.opp-faces img:first-child{margin-left:0}
+.opp-faces:empty{display:none}
+.opp-item-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Gegner: Teamname als Überschrift, Rahmen erst beim Bearbeiten */
+#opp-name{height:auto;padding:4px 8px;margin-left:-8px;background:transparent;border-color:transparent;font:600 24px/1.2 var(--f-display);letter-spacing:.01em}
+#opp-name:hover{border-color:var(--line)}
+#opp-name:focus{border-color:var(--accent);background:var(--bg)}

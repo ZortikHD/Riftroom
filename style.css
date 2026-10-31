@@ -1682,3 +1682,46 @@ html.calm-splash #splash.out{transform:none;filter:none}
 #opp-name{height:auto;padding:4px 8px;margin-left:-8px;background:transparent;border-color:transparent;font:600 24px/1.2 var(--f-display);letter-spacing:.01em}
 #opp-name:hover{border-color:var(--line)}
 #opp-name:focus{border-color:var(--accent);background:var(--bg)}
+/* Meta: breitere Karten (keine abgeschnittenen Namen), Winrate als feiner Balken, Alternativen als Chips */
+.meta-pool{grid-template-columns:repeat(auto-fill,minmax(min(100%,210px),1fr))}
+.meta-pool .pc-list li{grid-template-columns:26px minmax(0,1fr) auto;column-gap:8px}
+.meta-pool .pc-list li>img{grid-row:span 2;align-self:center}
+.meta-pool .pc-list li>.num{grid-column:3;grid-row:1;text-align:right}
+.meta-pool .pc-list li>.tag:not(.span2){grid-column:3;grid-row:2;justify-self:end;font-size:11px;padding:1px 6px}
+.meta-pool .pc-list li>.span2{grid-column:3;grid-row:1}
+.meta-pool .wr-bar{grid-column:2;grid-row:2;align-self:center;margin-top:0}
+.pc-list li{row-gap:4px}
+.wr-bar{grid-column:2/-1;position:relative;height:3px;border-radius:2px;background:var(--line);margin-top:-2px}
+.wr-bar::before{content:"";position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--faint)}
+.wr-bar i{position:absolute;top:0;bottom:0;border-radius:2px}
+.wr-bar i.up{left:50%;width:calc((var(--v) - .5)*100%);background:var(--accent)}
+.wr-bar i.down{right:50%;width:calc((.5 - var(--v))*100%);background:var(--warn)}
+.pc-alt{display:flex;flex-direction:column;gap:6px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line);font-size:13px}
+.pc-alt-row{display:flex;flex-wrap:wrap;gap:6px}
+.alt-chip{display:inline-flex;align-items:center;gap:6px;padding:3px 8px 3px 3px;border-radius:999px;background:var(--raised);font-size:13px}
+.alt-chip img{width:20px;height:20px;border-radius:50%;object-fit:cover}
+.alt-chip .num{color:var(--muted)}
+/* Spielplan: rechts Kurve und Stärken/Schwächen untereinander, beide Spalten enden etwa gleich hoch */
+@media (min-width:901px){.plan-grid{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr)}}
+.plan-side .sw-grid{grid-template-columns:minmax(0,1fr);gap:10px}
+.plan-side .sw-col{padding:12px 14px}
+.plan-side .sw-col ul{gap:4px}
+/* Pro Spieler: breitere Karten, besser lesbar */
+.role-grid{grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr))}
+.role-card{font-size:14px}
+@media (min-width:901px){.plan-grid{align-items:stretch}.plan-grid>.map-card{display:flex;align-items:center;justify-content:center}}
+/* Ergebnisse: Siegquote als Balken, Leerzustand mit Vorschau */
+.pc-list li .g-bar{grid-column:2/-1;height:3px;border-radius:2px;background:color-mix(in srgb,var(--red) 35%,var(--line));overflow:hidden;margin-top:-4px}
+.pc-list li .g-bar i{display:block;height:100%;background:var(--accent)}
+.games-empty{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:28px;align-items:center}
+.ge-text{display:flex;flex-direction:column;align-items:flex-start;gap:10px}
+.games-ghost{position:relative;padding:18px;border-radius:var(--r-lg);border:1px dashed var(--line-strong);opacity:.55;pointer-events:none;user-select:none}
+.games-ghost .tag{position:absolute;top:12px;right:12px}
+.games-ghost .big-rec{margin-bottom:10px}
+@media (max-width:760px){.games-empty{grid-template-columns:minmax(0,1fr)}}
+.games-empty{grid-template-areas:"art ghost" "text ghost";row-gap:14px}
+.games-empty>.empty-art{grid-area:art;align-self:end;justify-self:start}
+.games-empty>.ge-text{grid-area:text;align-self:start}
+.games-empty>.games-ghost{grid-area:ghost}
+@media (max-width:760px){.games-empty{grid-template-areas:"art" "text" "ghost"}}
+.opp-rec li .g-bar{grid-column:1/-1}

@@ -2,6 +2,8 @@
 // Der Riot-Key kommt nur aus dem Secret RIOT_API_KEY, geht nur im Header an Riot und wird nie zurückgegeben oder geloggt.
 // Alle Abfragen teilen sich ein Budget in der Datenbank (riot_take), damit der Key nie über Riots Limit kommt.
 // Ergebnisse werden zwischengespeichert: Konten 7 Tage, Profile 20 Minuten, einzelne Spiele dauerhaft (sie ändern sich nie).
+// Für die Profilseite: Profilsymbol und Level, die letzten Spiele einzeln und ein Rangverlauf (bei jeder frischen Abfrage
+// ein Punkt, höchstens alle 3 Stunden oder sobald sich etwas geändert hat).
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 // Nur den eigentlichen Key nehmen: Beim Kopieren rutschen leicht Leerzeichen, andere Bindestriche oder unsichtbare
@@ -65,12 +67,13 @@ async function lookup(name: string, tag: string, region: string) {
   const pkey = `${region}|${puuid}`;
   const cached = (await db.from('riot_profiles').select('data').eq('key', pkey).gt('at', new Date(Date.now() - 20 * 6e4).toISOString()).maybeSingle()).data;
   if (cached) return { ...cached.data, cached: true };
-  // 3. Spiel-IDs, Rang und Mastery
-  await take(3);
-  const [ranked, league, mastery] = await Promise.all([
+  // 3. Spiel-IDs, Rang, Mastery und Profilsymbol
+  await take(4);
+  const [ranked, league, mastery, summoner] = await Promise.all([
     riot(`https://${reg}.api.riotgames.com/lol/match/v5/matches/by-puuid/${puuid}/ids?type=ranked&count=${MATCHES}`),
     riot(`https://${plat}.api.riotgames.com/lol/league/v4/entries/by-puuid/${puuid}`),
     riot(`https://${plat}.api.riotgames.com/lol/champion-mastery/v4/champion-masteries/by-puuid/${puuid}/top?count=8`),
+    riot(`https://${plat}.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/${puuid}`),
   ]);
   let ids: string[] = Array.isArray(ranked) ? ranked : [];
   let onlyRanked = true;
@@ -112,8 +115,24 @@ async function lookup(name: string, tag: string, region: string) {
     last = Math.max(last, Date.parse(r.at) || 0);
   }
   const entry = (t: string) => { const e = Array.isArray(league) ? league.find((x: { queueType: string }) => x.queueType === t) : null; return e ? { tier: e.tier, rank: e.rank, lp: e.leaguePoints, w: e.wins, l: e.losses } : null; };
+  // Rangverlauf: neuen Punkt speichern, wenn sich etwas geändert hat oder der letzte älter als 3 Stunden ist.
+  const history: Record<string, (string | number)[][]> = {};
+  for (const [q, t] of [['solo', 'RANKED_SOLO_5x5'], ['flex', 'RANKED_FLEX_SR']]) {
+    const e = entry(t);
+    const last = (await db.from('riot_rank_history').select('tier,div,lp,w,l,at').eq('puuid', puuid).eq('queue', q).order('at', { ascending: false }).limit(1).maybeSingle()).data;
+    if (e) {
+      const changed = !last || last.tier !== e.tier || last.div !== (e.rank || '') || last.lp !== e.lp || last.w !== e.w || last.l !== e.l;
+      if (changed || Date.now() - Date.parse(last.at) > 3 * 36e5) await db.from('riot_rank_history').insert({ puuid, queue: q, tier: e.tier, div: e.rank || '', lp: e.lp | 0, w: e.w | 0, l: e.l | 0 });
+    }
+    const rows = (await db.from('riot_rank_history').select('tier,div,lp,w,l,at').eq('puuid', puuid).eq('queue', q).order('at', { ascending: false }).limit(120)).data || [];
+    history[q] = rows.reverse().map((r: { tier: string; div: string; lp: number; w: number; l: number; at: string }) => [Date.parse(r.at), r.tier, r.div, r.lp, r.w, r.l]);
+  }
+  const recent = [...mine].sort((a: { at: string }, b: { at: string }) => Date.parse(b.at) - Date.parse(a.at))
+    .map((r: { champ: string; pos: string; win: boolean; k: number; d: number; a: number; dur: number; at: string; q: number }) => ({ c: r.champ, p: r.pos, w: r.win ? 1 : 0, k: r.k | 0, d: r.d | 0, a: r.a | 0, m: Math.round((r.dur | 0) / 60), t: Date.parse(r.at) || 0, q: r.q }));
   const data = {
     name: acct.name, tag: acct.tag, region,
+    icon: typeof summoner?.profileIconId === 'number' ? summoner.profileIconId : null, level: typeof summoner?.summonerLevel === 'number' ? summoner.summonerLevel : null,
+    recent, history,
     rank: { solo: entry('RANKED_SOLO_5x5'), flex: entry('RANKED_FLEX_SR') },
     mastery: (Array.isArray(mastery) ? mastery : []).map((m: { championId: number; championLevel: number; championPoints: number }) => ({ c: m.championId, lvl: m.championLevel, pts: m.championPoints })),
     games: mine.length, onlyRanked, last, roles,
@@ -126,6 +145,7 @@ async function lookup(name: string, tag: string, region: string) {
     await db.from('riot_profiles').delete().lt('at', new Date(Date.now() - 864e5).toISOString());
     await db.from('riot_accounts').delete().lt('at', new Date(Date.now() - 30 * 864e5).toISOString());
     await db.from('riot_matches').delete().lt('at', new Date(Date.now() - 120 * 864e5).toISOString());
+    await db.from('riot_rank_history').delete().lt('at', new Date(Date.now() - 400 * 864e5).toISOString());
   }
   return data;
 }

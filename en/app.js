@@ -26,7 +26,7 @@ if(STANDALONE){
 }
 const calm=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const paths={check:'M5 12.5l4.5 4.5L19 7.5',swap:'M7 4 3 8l4 4 M3 8h14 M17 20l4-4-4-4 M21 16H7',search:'M21 21l-5-5 M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0',close:'m6 6 12 12 M6 18 18 6',plus:'M12 5v14 M5 12h14',spark:'m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z',upload:'M12 16V4 m-5 5 5-5 5 5 M4 16v5h16v-5',download:'M12 3v12 m-5-5 5 5 5-5 M4 16v5h16v-5',chevrondown:'m6 9 6 6 6-6',trash:'M3 6h18 M9 6V3h6v3 M5 6l1 15h12l1-15',map:'M9 4 3 6v14l6-2 6 2 6-2V4l-6 2z M9 4v14 M15 6v14',users:'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M22 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75',timer:'M12 8v5l3 2 M9 2h6 M20 13a8 8 0 1 1-16 0 8 8 0 0 1 16 0',copy:'M8 8h12v12H8z M16 8V4H4v12h4',play:'M7 4v16l13-8z',book:'M4 4h10a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4z M8 20a4 4 0 0 1 0-8h10',back:'M15 18l-6-6 6-6',refresh:'M20 7v5h-5 M4 17v-5h5 M6 7a7 7 0 0 1 12-2l2 3 M18 17a7 7 0 0 1-12 2l-2-3'};
+const paths={user:'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M4.5 20.5a7.5 7.5 0 0 1 15 0',check:'M5 12.5l4.5 4.5L19 7.5',swap:'M7 4 3 8l4 4 M3 8h14 M17 20l4-4-4-4 M21 16H7',search:'M21 21l-5-5 M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0',close:'m6 6 12 12 M6 18 18 6',plus:'M12 5v14 M5 12h14',spark:'m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z',upload:'M12 16V4 m-5 5 5-5 5 5 M4 16v5h16v-5',download:'M12 3v12 m-5-5 5 5 5-5 M4 16v5h16v-5',chevrondown:'m6 9 6 6 6-6',trash:'M3 6h18 M9 6V3h6v3 M5 6l1 15h12l1-15',map:'M9 4 3 6v14l6-2 6 2 6-2V4l-6 2z M9 4v14 M15 6v14',users:'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M22 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75',timer:'M12 8v5l3 2 M9 2h6 M20 13a8 8 0 1 1-16 0 8 8 0 0 1 16 0',copy:'M8 8h12v12H8z M16 8V4H4v12h4',play:'M7 4v16l13-8z',book:'M4 4h10a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4z M8 20a4 4 0 0 1 0-8h10',back:'M15 18l-6-6 6-6',refresh:'M20 7v5h-5 M4 17v-5h5 M6 7a7 7 0 0 1 12-2l2 3 M18 17a7 7 0 0 1-12 2l-2-3'};
 const icon=(name,cls='')=>`<svg class="icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[name]||paths.spark}"/></svg>`;
 
 let state=initialState(),catalog,page='draft',metaTab='pool',refreshMessage='',toastTimer,pickerTarget=null,pickerRole='ALL',pickerSearch='',metaRole='ALL',metaSearch='',metaSort='adjusted',confirmAction=null,prevMeta=null,backupTimer,selectedOpponent='',analysisText='',analysisBusy=false,analysisCtrl=null,templatesOpen=false,logResult=null;
@@ -68,7 +68,7 @@ const lbCtx={esc:v=>esc(v),LOADING,SQUARE,icon:n=>icon(n),toast:(m,e)=>toast(m,e
 if(STANDALONE)setSupabase(()=>loadSb());
 const MAIN_PAGES={draft:'Draft',team:'Team',opponents:'Opponents',meta:'Meta',mini:'Mini games'};
 const MORE_PAGES={games:'Results',settings:'Data & Backup'};
-const PAGES={...MAIN_PAGES,...MORE_PAGES};
+const PAGES={...MAIN_PAGES,...MORE_PAGES,profile:'Profile'};
 const META_TABS=[['pool','Your Pool'],['bans','Bans'],['trends','Trends'],['all','All Champions']];
 
 const champ=id=>catalog?.champions.find(c=>c.id===id);
@@ -182,8 +182,8 @@ function render(){
  const nav=Object.entries(MAIN_PAGES).map(([k,l])=>`<button class="tab ${navOn(k)?'on':''}" data-page="${k}" ${navOn(k)?'aria-current="page"':''}>${k==='mini'?`<span class="tab-full">${l}</span><span class="tab-short">Games</span>`:l}${k==='meta'&&newPatch?'<span class="new-dot" title="Neuer Patch"></span>':''}</button>`).join('')
   +`<details class="more"><summary class="tab ${inMore?'on':''}">${inMore?`<span class="more-full">${MORE_PAGES[page]}</span><span class="more-short">More</span>`:'More'}<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5"/></svg></summary><div class="more-menu">${Object.entries(MORE_PAGES).map(([k,l])=>`<button class="more-item ${page===k?'on':''}" data-page="${k}" ${page===k?'aria-current="page"':''}>${l}</button>`).join('')}</div></details>`;
  const chip=st.ok?`<span class="chip ok" title="Win rates from ${esc(m.source)}, as of ${date(m.updatedAt)}"><span class="dot"></span>Patch ${esc(shortPatch(currentPatch()))}${st.fallback?` · Winrates ${esc(shortPatch(m.patch))}`:''}</span>`:`<span class="chip" title="${refreshMessage.startsWith('Offline')?esc(refreshMessage):''}"><span class="dot"></span>${m?esc(st.label):refreshMessage.startsWith('Offline')?'Offline':'No win rates'}</span>`;
- const views={plan:renderPlan,draft:renderDraft,meta:renderMeta,opponents:renderOpponents,team:renderTeam,games:renderGames,mini:renderMiniPage,settings:renderSettings};
- app.innerHTML=`<header class="top"><div class="top-in"><button class="brand" data-page="draft"><img src="icon.svg" alt="">Riftroom</button><nav class="tabs" aria-label="Main navigation">${nav}</nav><div class="top-right">${chip}${installEvt?`<button class="install-btn" data-action="install" title="Install Riftroom as an app">${icon('download')}<span>App</span></button>`:''}<button class="lang-btn" data-action="lang" title="Auf Deutsch umstellen" aria-label="Language: English. Switch to German">DE</button><button class="help-btn" data-action="tour" title="Show introduction" aria-label="Show introduction">?</button></div></div></header>
+ const views={profile:renderProfile,plan:renderPlan,draft:renderDraft,meta:renderMeta,opponents:renderOpponents,team:renderTeam,games:renderGames,mini:renderMiniPage,settings:renderSettings};
+ app.innerHTML=`<header class="top"><div class="top-in"><button class="brand" data-page="draft"><img src="icon.svg" alt="">Riftroom</button><nav class="tabs" aria-label="Main navigation">${nav}</nav><div class="top-right">${chip}${installEvt?`<button class="install-btn" data-action="install" title="Install Riftroom as an app">${icon('download')}<span>App</span></button>`:''}${meBtn()}<button class="lang-btn" data-action="lang" title="Auf Deutsch umstellen" aria-label="Language: English. Switch to German">DE</button><button class="help-btn" data-action="tour" title="Show introduction" aria-label="Show introduction">?</button></div></div></header>
  <main class="page ${page!==lastPageRendered?'enter':''}">${bannerHtml()}${roomBarHtml()}<div class="page-body ${room?.role==='viewer'?'viewer':''}" ${viewerLocked()?'inert':''}>${views[page]()}</div></main>
  <footer class="foot"><div class="foot-in">Fan project. Riot Games does not endorse or sponsor this project. <button class="link" data-page="settings">Data sources and legal</button></div></footer>`;
  placeTabInk();decorateEmpty();fitCurves();
@@ -876,6 +876,102 @@ function renderOpponents(){
 }
 
 
+/* ---------- Profil (nur GitHub-Version) ---------- */
+// Eigener Account: Riot-ID einmal eintragen, dann Rang, Rangverlauf, Form der letzten Spiele und die besten Champions.
+// Die ID bleibt nur in diesem Browser (riftroom.me). Der Rangverlauf wächst mit jeder frischen Abfrage (höchstens alle 3 Stunden ein Punkt).
+const ME_KEY='riftroom.me';
+let me=(()=>{try{const v=JSON.parse(localStorage.getItem(ME_KEY));return v&&typeof v.id==='string'&&typeof v.region==='string'?v:null;}catch{return null;}})();
+let profQueue='solo',profEdit=false;
+const saveMe=()=>{try{me?localStorage.setItem(ME_KEY,JSON.stringify(me)):localStorage.removeItem(ME_KEY);}catch{}};
+const TIER_ORDER=['IRON','BRONZE','SILVER','GOLD','PLATINUM','EMERALD','DIAMOND','MASTER','GRANDMASTER','CHALLENGER'];
+const DIVS={IV:0,III:1,II:2,I:3};
+// Rang als Zahl für den Graphen: je Stufe 400 Punkte (4 Divisionen à 100 LP), ab Master zählen nur noch die LP.
+const rankVal=(tier,div,lp)=>{const t=TIER_ORDER.indexOf(tier);if(t<0)return null;return t>=7?2800+(lp|0):t*400+(DIVS[div]??0)*100+Math.min(lp|0,100);};
+const rankName=(tier,div)=>`${TIER[tier]||tier}${TIER_ORDER.indexOf(tier)>=7?'':' '+(div||'')}`;
+const valName=v=>v>=2800?`${TIER.MASTER} ${v-2800} LP`:`${TIER[TIER_ORDER[Math.floor(v/400)]]} ${['IV','III','II','I'][Math.floor((v%400)/100)]}`;
+const TIER_COLOR={IRON:'#8b8b8b',BRONZE:'#b7794d',SILVER:'#a9b4c0',GOLD:'#e6c15a',PLATINUM:'#4fc1b0',EMERALD:'#3fbf73',DIAMOND:'#6f9df0',MASTER:'#b06cf0',GRANDMASTER:'#ef5f63',CHALLENGER:'#f2d16b'};
+const champOf=n=>{const l=String(n||'').toLowerCase();return catalog?.champions.find(c=>c.id.toLowerCase()===l)?.id||null;};
+const profIconUrl=d=>d?.icon!=null&&catalog?`https://ddragon.leagueoflegends.com/cdn/${catalog.version}/img/profileicon/${d.icon}.png`:'';
+const shortDate=t=>new Date(t).toLocaleDateString('en-GB',{day:'2-digit',month:'2-digit'});
+function meBtn(){
+ if(!STANDALONE)return'';
+ const d=me?riotState(me.region,me.id)?.data:null,url=profIconUrl(d);
+ return`<button class="prof-btn ${page==='profile'?'on':''}" data-page="profile" title="Profile" aria-label="Profile">${url?`<img src="${url}" alt="">`:icon('user')}</button>`;
+}
+function profForm(){
+ return`<section class="card prof-form"><h2>Enter your Riot ID</h2><p class="fine">Name and tag as in the client, e.g. Faker#KR1. The ID stays in this browser only.</p><div class="row wrap"><input class="field grow" id="prof-id" value="${esc(me?.id||'')}" placeholder="Name#TAG" maxlength="40" autocomplete="off" spellcheck="false" aria-label="Riot-ID"><select class="field" id="prof-region" aria-label="Region">${OPP_REGIONS.map(r=>`<option value="${r}" ${(me?.region||state.riotRegion||'euw')===r?'selected':''}>${r.toUpperCase()}</option>`).join('')}</select><button class="btn primary" data-prof="save">Load profile</button>${me?'<button class="btn ghost" data-prof="cancel">Cancel</button>':''}</div><p class="fine prof-err" id="prof-err" role="alert"></p></section>`;
+}
+function profSave(){
+ const id=($('#prof-id')?.value||'').trim(),region=$('#prof-region')?.value||'euw';
+ if(!validRiotId(id)){const e=$('#prof-err');if(e)e.textContent='Please enter it as Name#TAG, e.g. Faker#KR1.';return;}
+ me={id,region};saveMe();profEdit=false;riotLoad(region,id);render();
+}
+// Kleiner Linien-Graph ohne Bibliothek: Linie als SVG (dehnt sich mit), Punkte und Beschriftungen als HTML, damit nichts verzerrt.
+function lineChart(pts,{min,max,grid=[],cls='',area=true}){
+ const X=p=>p.x*100,Y=v=>100-(v-min)/(max-min||1)*100;
+ const poly=pts.map(p=>`${X(p).toFixed(2)},${Y(p.v).toFixed(2)}`).join(' ');
+ return`<div class="lc ${cls}">${grid.map(g=>`<div class="lc-grid ${g.cls||''}" style="top:${Y(g.v)}%"><span>${g.label}</span></div>`).join('')}<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${area?`<polygon class="lc-area" points="0,100 ${poly} 100,100"/>`:''}<polyline class="lc-line" points="${poly}" vector-effect="non-scaling-stroke"/></svg>${pts.map(p=>`<i class="lc-dot ${p.cls||''}" style="left:${X(p)}%;top:${Y(p.v)}%" title="${esc(p.title||'')}"></i>`).join('')}</div>`;
+}
+function rankHistoryCard(d){
+ const H=(d.history?.[profQueue]||[]).map(([t,tier,div,lp,w,l])=>({t,v:rankVal(tier,div,lp),tier,div,lp,w,l})).filter(x=>x.v!=null);
+ const seg=`<div class="seg small" role="group">${[['solo','Solo/Duo'],['flex','Flex']].map(([q,l])=>`<button data-prof-q="${q}" aria-pressed="${profQueue===q}">${l}</button>`).join('')}</div>`;
+ let body;
+ if(!H.length)body=`<p class="fine">${d.rank?.[profQueue]?'Your history starts now.':'No rank in this queue yet.'} Every time you open your profile, a new point is added (at most every 3 hours). Your graph builds up over time.</p>`;
+ else if(H.length<2){const h=H[0];body=`<div class="prof-hist-one" style="--tc:${TIER_COLOR[h.tier]}"><b>${rankName(h.tier,h.div)}</b><span class="num">${h.lp} LP</span><small>${shortDate(h.t)}</small></div><p class="fine">Your history starts now. Every time you open your profile, a new point is added (at most every 3 hours). Your graph builds up over time.</p>`;}
+ else{
+  const t0=H[0].t,t1=H[H.length-1].t,span=Math.max(1,t1-t0);
+  let lo=Math.min(...H.map(h=>h.v)),hi=Math.max(...H.map(h=>h.v));
+  const pad=Math.max(25,(hi-lo)*.15);lo=Math.max(0,lo-pad);hi=hi+pad;
+  const step=hi-lo>900?400:100,grid=[];for(let g=Math.ceil(lo/step)*step;g<=hi;g+=step)grid.push({v:g,label:valName(g),cls:g%400===0?'major':''});
+  const pts=H.map(h=>({x:(h.t-t0)/span,v:h.v,title:`${shortDate(h.t)} · ${rankName(h.tier,h.div)} · ${h.lp} LP`}));
+  const first=H[0],lastH=H[H.length-1],dv=lastH.v-first.v;
+  body=`<div class="prof-hist-sum"><b style="color:${TIER_COLOR[lastH.tier]}">${rankName(lastH.tier,lastH.div)} · ${lastH.lp} LP</b><span class="tag ${dv>0?'good':dv<0?'warn':''}">${dv>0?'+':''}${dv} LP</span><span class="fine">${shortDate(t0)} – ${shortDate(t1)}</span></div>${lineChart(pts,{min:lo,max:hi,grid,cls:'rank'})}`;
+ }
+ return`<section class="card prof-card"><div class="card-head"><h2>Rank history</h2>${seg}</div>${body}</section>`;
+}
+function formCard(d){
+ const R=(d.recent||[]).slice(0,20);
+ if(!R.length)return`<section class="card prof-card"><div class="card-head"><h2>Form</h2></div><p class="fine">No Summoner\'s Rift games recently.</p></section>`;
+ const chron=[...R].reverse(),w=R.filter(g=>g.w).length,l=R.length-w;
+ const kda=g=>(g.k+g.a)/Math.max(1,g.d),avgK=R.reduce((s,g)=>s+kda(g),0)/R.length,avgM=Math.round(R.reduce((s,g)=>s+g.m,0)/R.length);
+ let ww=0;const trend=chron.map((g,i)=>{ww+=g.w;return{x:chron.length>1?i/(chron.length-1):.5,v:ww/(i+1)*100,cls:g.w?'win':'loss',title:`${cname(champOf(g.c)||g.c)} · ${g.w?'W':'L'} · ${g.k}/${g.d}/${g.a}`};});
+ const maxK=Math.max(5,...R.map(kda));
+ const strip=`<div class="prof-strip">${R.map(g=>{const id=champOf(g.c);return`<span class="ps ${g.w?'win':'loss'}" title="${esc(cname(id||g.c))} · ${g.k}/${g.d}/${g.a} · ${g.m} min · ${shortDate(g.t)}">${id?`<img src="${SQUARE[id]}" alt="">`:''}</span>`;}).join('')}</div>`;
+ const bars=`<div class="prof-bars">${chron.map(g=>`<span class="pb ${g.w?'win':'loss'}" style="--h:${Math.min(1,kda(g)/maxK)*100}%" title="${esc(cname(champOf(g.c)||g.c))} · KDA ${kda(g).toFixed(1)} (${g.k}/${g.d}/${g.a})"></span>`).join('')}</div>`;
+ return`<section class="card prof-card"><div class="card-head"><h2>Form</h2><span class="fine">Last ${R.length} games</span></div>
+ <div class="prof-form-sum"><b class="num">${w}<span class="muted">–</span>${l}</b><span>${pct(w/R.length*100)}</span><span>Avg KDA ${kdaTxt({k:avgK,a:0,d:1})}</span><span>Avg ${avgM} min</span></div>${strip}
+ <div class="prof-sub"><span class="role-label">Win rate over time</span>${lineChart(trend,{min:0,max:100,grid:[{v:50,label:'50 %',cls:'major'}],cls:'wr',area:false})}</div>
+ <div class="prof-sub"><span class="role-label">KDA per game</span>${bars}</div>${d.onlyRanked===false?'<p class="fine">Few ranked games, so normal games are included too.</p>':''}</section>`;
+}
+function champsCard(d){
+ const m=new Map();for(const c of d.champs||[]){const id=champOf(c.id);if(!id)continue;const r=m.get(id)||{id,n:0,w:0,k:0,d:0,a:0};r.n+=c.n;r.w+=c.w;r.k+=c.k;r.d+=c.d;r.a+=c.a;m.set(id,r);}
+ const list=[...m.values()].sort((a,b)=>b.n-a.n||b.w-a.w).slice(0,6);
+ const roles=Object.entries(d.roles||{}).sort((a,b)=>b[1]-a[1]),tot=roles.reduce((s,[,n])=>s+n,0)||1;
+ const byKey=new Map((catalog?.champions||[]).map(c=>[String(c.key),c.id]));
+ const mast=(d.mastery||[]).map(x=>({id:byKey.get(String(x.c)),pts:x.pts,lvl:x.lvl})).filter(x=>x.id).slice(0,5);
+ const fmtPts=n=>n>=999500?(n/1e6).toFixed(1).replace('.','.')+'M':n>=1e3?Math.round(n/1e3)+'k':String(n);
+ return`<section class="card prof-card"><div class="card-head"><h2>Champions</h2></div>${list.length?`<ul class="pc-list prof-champs">${list.map(c=>`<li>${portrait(c.id,'av sm')}<span class="pc-name">${esc(cname(c.id))}</span><span class="num">${c.n} games</span><span class="num r ${c.w/c.n>=.5?'pos':''}">${pct(c.w/c.n*100)}</span><span class="g-bar" aria-hidden="true"><i style="width:${Math.round(c.w/c.n*100)}%"></i></span><span class="fine kda">KDA ${kdaTxt(c)}</span></li>`).join('')}</ul>`:'<p class="fine">No Summoner\'s Rift games recently.</p>'}
+</section><section class="card prof-card prof-more"> ${roles.length?`<div class="prof-sub"><span class="role-label">Roles</span><div class="prof-roles">${roles.map(([r,n])=>`<div class="pr"><span>${ROLE_NAMES[r]||r}</span><span class="pr-bar"><i style="width:${n/tot*100}%"></i></span><span class="num">${n}</span></div>`).join('')}</div></div>`:''}
+ ${mast.length?`<div class="prof-sub"><span class="role-label">Top mastery</span><div class="prof-mast">${mast.map(x=>`<span class="alt-chip" title="${esc(cname(x.id))} · Level ${x.lvl}">${portrait(x.id,'')}<span>${esc(cname(x.id))}</span><span class="num">${fmtPts(x.pts)}</span></span>`).join('')}</div></div>`:''}</section>`;
+}
+function renderProfile(){
+ if(!STANDALONE)return head('Profile','Your account: rank, history and form over your recent games.')+`<section class="card empty"><p>The profile is only available in the Riftroom version on GitHub because it needs the Riot lookup.</p></section>`;
+ if(!me||profEdit)return head('Profile','Your account: rank, history and form over your recent games.')+profForm();
+ const st=riotState(me.region,me.id);
+ if(!st||st.status==='ok')setTimeout(()=>riotLoad(me.region,me.id),0);
+ const d=st?.data,busy=st&&(st.status==='loading'||st.status==='wait');
+ const actions=`<button class="btn small" data-prof="reload" ${busy?'disabled':''}>${icon('refresh')}Refresh</button><button class="btn ghost small" data-prof="edit">Change Riot ID</button>`;
+ if(!d){
+  const msg=st?.status==='error'?`<p class="riot-err">${esc(RIOT_ERR[st.err]||RIOT_ERR.upstream)}</p><button class="btn" data-prof="reload">Try again</button>`:st?.status==='wait'?`<p class="fine">Riot limit reached. Retrying automatically in a moment.</p>`:`<p class="riot-status"><span class="spinner small"></span>Loading profile …</p>`;
+  return head('Profile','Your account: rank, history and form over your recent games.',actions)+`<section class="card prof-wait"><h2>${esc(me.id)}</h2>${msg}</section>`;
+ }
+ const url=profIconUrl(d);
+ const rankBox=(q,label)=>{const e=d.rank?.[q];if(!e)return`<div class="prof-rank none"><span class="role-label">${label}</span><b>Unranked</b></div>`;const g=e.w+e.l,wr=g?e.w/g*100:0;return`<div class="prof-rank" style="--tc:${TIER_COLOR[e.tier]||'var(--text)'}"><div class="pr-ring" style="--p:${wr.toFixed(1)}"><span class="num">${Math.round(wr)}%</span></div><div><span class="role-label">${label}</span><b>${rankName(e.tier,e.rank)}</b><span class="num pr-lp">${e.lp} LP</span><small>${e.w} W · ${e.l} L</small></div></div>`;};
+ const err=st.status==='error'?`<p class="riot-err">${esc(RIOT_ERR[st.err]||RIOT_ERR.upstream)}</p>`:'';
+ const hero=`<section class="card prof-hero"><div class="prof-id">${url?`<img class="prof-icon" src="${url}" alt="">`:`<span class="prof-icon none">${icon('user')}</span>`}<div class="prof-name"><h2>${esc(d.name)}<span class="muted">#${esc(d.tag)}</span></h2><p class="fine">${d.level?`Level ${d.level} · `:''}${esc(String(d.region).toUpperCase())} · ${st.status==='loading'||st.status==='wait'?'loading …':agoTxt(st.t||Date.now())}</p></div></div><div class="prof-ranks">${rankBox('solo','Solo/Duo')}${rankBox('flex','Flex')}</div></section>`;
+ return head('Profile','Your account: rank, history and form over your recent games.',actions)+err+hero+`<div class="prof-grid">${rankHistoryCard(d)}${formCard(d)}</div><div class="prof-grid">${champsCard(d)}</div>`;
+}
+
 /* ---------- Riot-Abfrage (nur GitHub-Version) ---------- */
 // Riot-ID eintragen, „Laden“ drücken: Rang, Mastery und die meistgespielten Champions der letzten 20 Spiele.
 // Der Riot-Key bleibt in der Supabase-Funktion, hier kommt nur das Ergebnis an.
@@ -1141,7 +1237,7 @@ async function connect(){
 // bei Supabase in Frankfurt, ohne Login. Die Bibliothek lädt erst, wenn jemand einen Raum benutzt.
 const SB_URL='https://vupytxgbazwgyhslzaxo.supabase.co',SB_KEY='sb_publishable_gHcNFcK3HK-HgrvshRIKBQ_lxOq3e5a';
 let scoutTimer=null;
-if(STANDALONE)initRiot({url:SB_URL+'/functions/v1/riot',key:SB_KEY,onUpdate:()=>{if(page==='team'||page==='opponents'||$('#confirm-dialog').open)riotRepaint();if(page==='draft'){clearTimeout(scoutTimer);scoutTimer=setTimeout(render,400);}}});
+if(STANDALONE)initRiot({url:SB_URL+'/functions/v1/riot',key:SB_KEY,onUpdate:()=>{if(page==='profile'){render();return;}if(page==='team'||page==='opponents'||$('#confirm-dialog').open)riotRepaint();$('.prof-btn')&&me&&($('.prof-btn').outerHTML=meBtn());if(page==='draft'){clearTimeout(scoutTimer);scoutTimer=setTimeout(render,400);}}});
 const ROOM_KEYS=['teamName','players','allies','enemies','bans','draftMode','side','draftActive','opponents','opponentId','matchups','fearless'];
 let room=null,sbClient=null,roomChannel=null,roomPushTimer=null,roomPoll=null,roomPushing=false,roomDirty=false;
 const viewerLocked=()=>room?.role==='viewer'&&!['plan','meta','mini','draft'].includes(page);
@@ -1327,6 +1423,8 @@ document.addEventListener('click',e=>{
  if(handleLobbyClick(el))return;
  if(page==='mini'&&miniTab!=='guess'&&handlePuzzleClick(el))return;
  if(handleMiniClick(el))return;
+ if(el.dataset.prof){const a=el.dataset.prof;if(a==='save')profSave();else if(a==='edit'){profEdit=true;render();setTimeout(()=>$('#prof-id')?.focus(),0);}else if(a==='cancel'){profEdit=false;render();}else if(a==='reload'&&me){riotLoad(me.region,me.id,true);}return;}
+ if(el.dataset.profQ){profQueue=el.dataset.profQ;render();return;}
  if(el.dataset.page){page=el.dataset.page;if(page==='meta'&&catalog&&state.meta&&state.seenPatch!==shortPatch(catalog.version)){state.seenPatch=shortPatch(catalog.version);save();}saveUi();render();window.scrollTo({top:0,behavior:'instant'});return;}
  if(el.dataset.metaTab){metaTab=el.dataset.metaTab;saveUi();render();return;}
  if(el.dataset.picker){openPicker(el.dataset.picker,Number(el.dataset.index));return;}
@@ -1446,5 +1544,6 @@ init();
 
 // Mehr-Menü schließen, wenn außerhalb geklickt oder Escape gedrückt wird.
 document.addEventListener('click',e=>{for(const d of document.querySelectorAll('details.more[open]'))if(!d.contains(e.target))d.open=false;});
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id==='prof-id'){e.preventDefault();profSave();}});
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id==='room-code'){e.preventDefault();joinRoom(e.target.value);}if(e.key==='Enter'&&e.target.id==='lb-code'){e.preventDefault();document.querySelector('[data-lb="join"]')?.click();}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')for(const d of document.querySelectorAll('details.more[open]'))d.open=false;});

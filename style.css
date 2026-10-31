@@ -1771,3 +1771,81 @@ dialog>:last-child:not(.dlg-actions){margin-bottom:22px}
  .cl-text .fine{display:block}
 }
 @media (max-width:899px){.cl-list li.done .cl-text .fine{display:none}.cl-list li.done{padding-top:8px;padding-bottom:8px}}
+/* ---------- Profil ---------- */
+.prof-btn{display:grid;place-items:center;width:34px;height:34px;padding:0;border-radius:50%;border:1px solid var(--line-strong);background:var(--raised);color:var(--muted);overflow:hidden;flex:none}
+.prof-btn img{width:100%;height:100%;object-fit:cover}
+.prof-btn .icon{width:18px;height:18px}
+.prof-btn:hover,.prof-btn.on{border-color:var(--accent);color:var(--text)}
+.prof-form{display:flex;flex-direction:column;gap:10px;max-width:720px}
+.prof-form .row{gap:8px}
+.prof-err{color:var(--red);min-height:1em}
+.prof-wait{display:flex;flex-direction:column;align-items:flex-start;gap:10px}
+.prof-hero{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:18px 28px;background:radial-gradient(60% 120% at 0% 0%,color-mix(in srgb,var(--accent) 8%,transparent),transparent 70%),var(--surface)}
+.prof-id{display:flex;align-items:center;gap:16px;min-width:0}
+.prof-icon{width:72px;height:72px;border-radius:50%;object-fit:cover;border:2px solid var(--accent);box-shadow:0 0 0 4px var(--accent-soft);flex:none}
+.prof-icon.none{display:grid;place-items:center;background:var(--raised);color:var(--muted)}
+.prof-icon.none .icon{width:30px;height:30px}
+.prof-name{min-width:0}
+.prof-name h2{font-size:32px;line-height:1.05;overflow-wrap:anywhere}
+.prof-name h2 .muted{font-size:20px;margin-left:4px}
+.prof-ranks{display:flex;flex-wrap:wrap;gap:12px}
+.prof-rank{display:flex;align-items:center;gap:12px;padding:12px 16px 12px 12px;border-radius:var(--r-lg);border:1px solid var(--line);background:var(--bg);min-width:220px;box-shadow:inset 3px 0 0 var(--tc,var(--line))}
+.prof-rank b{display:block;font:700 20px/1.1 var(--f-display);color:var(--tc);text-transform:uppercase;letter-spacing:.02em}
+.prof-rank .pr-lp{display:block;font-size:14px}
+.prof-rank small{color:var(--muted);font-size:12px}
+.prof-rank.none{box-shadow:none;align-items:flex-start;flex-direction:column;gap:2px}
+.prof-rank.none b{color:var(--muted)}
+.pr-ring{position:relative;display:grid;place-items:center;width:54px;height:54px;border-radius:50%;flex:none;background:conic-gradient(var(--accent) calc(var(--p)*1%),color-mix(in srgb,var(--red) 45%,var(--line)) 0)}
+.pr-ring::before{content:"";position:absolute;inset:5px;border-radius:50%;background:var(--bg)}
+.pr-ring span{position:relative;font-size:12px;font-weight:600}
+.prof-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,440px),1fr));gap:20px;align-items:start}
+.prof-card .card-head{margin-bottom:12px}
+.prof-card .seg.small button{padding:4px 10px;font-size:13px}
+.prof-sub{display:flex;flex-direction:column;gap:8px;margin-top:16px}
+.prof-hist-sum{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-bottom:14px}
+.prof-hist-sum b{font:700 20px var(--f-display);text-transform:uppercase}
+.prof-hist-sum .fine{margin-left:auto}
+.prof-hist-one{display:flex;align-items:baseline;gap:10px;margin-bottom:10px}
+.prof-hist-one b{font:700 24px var(--f-display);color:var(--tc);text-transform:uppercase}
+.prof-hist-one small{color:var(--muted)}
+/* Linien-Graph */
+.lc{position:relative;height:180px;margin:6px 0 4px;padding-left:0}
+.lc.wr{height:110px}
+.lc svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.lc-line{fill:none;stroke:var(--accent);stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round}
+.lc.rank .lc-line{stroke:var(--blue)}
+.lc-area{fill:color-mix(in srgb,var(--blue) 12%,transparent)}
+.lc-grid{position:absolute;left:0;right:0;height:0;border-top:1px dashed var(--line)}
+.lc-grid.major{border-top-style:solid;border-color:var(--line-strong)}
+.lc-grid span{position:absolute;right:0;top:-16px;font-size:11px;color:var(--faint);background:var(--surface);padding:0 0 0 6px}
+.lc-dot{position:absolute;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;border-radius:50%;background:var(--blue);box-shadow:0 0 0 2px var(--surface)}
+.lc.wr .lc-dot{width:8px;height:8px;margin:-4px 0 0 -4px}
+.lc-dot.win{background:var(--accent)}.lc-dot.loss{background:var(--red)}
+/* Form */
+.prof-form-sum{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 16px;margin-bottom:12px;color:var(--muted);font-size:14px}
+.prof-form-sum b{font:700 28px var(--f-display);color:var(--text)}
+.prof-strip{display:grid;grid-template-columns:repeat(20,minmax(0,1fr));gap:3px}
+.ps{position:relative;aspect-ratio:1;border-radius:var(--r-sm);overflow:hidden;background:var(--raised);box-shadow:inset 0 -3px 0 var(--c)}
+.ps.win{--c:var(--accent)}.ps.loss{--c:var(--red)}
+.ps img{width:100%;height:100%;object-fit:cover;opacity:.9}
+.ps.loss img{filter:grayscale(.6) brightness(.75)}
+.prof-bars{display:flex;align-items:flex-end;gap:3px;height:70px;padding-bottom:1px;border-bottom:1px solid var(--line)}
+.pb{flex:1;height:max(3px,var(--h));border-radius:3px 3px 0 0;background:var(--accent);opacity:.85}
+.pb.loss{background:var(--red);opacity:.7}
+@media (max-width:520px){.prof-strip{grid-template-columns:repeat(10,minmax(0,1fr))}.prof-name h2{font-size:26px}.prof-rank{min-width:0;flex:1 1 100%}}
+/* Champions, Rollen, Mastery */
+.prof-champs li{grid-template-columns:28px minmax(0,1fr) auto 56px;row-gap:4px}
+.prof-champs .g-bar{grid-column:2/4}
+.prof-champs .kda{grid-column:4;grid-row:2;text-align:right;font-size:11px;margin-top:-4px}
+.prof-roles{display:grid;gap:6px}
+.pr{display:grid;grid-template-columns:70px minmax(0,1fr) 28px;align-items:center;gap:10px;font-size:13px}
+.pr-bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.pr-bar i{display:block;height:100%;background:var(--blue);border-radius:3px}
+.pr .num{text-align:right;color:var(--muted)}
+.prof-mast{display:flex;flex-wrap:wrap;gap:6px}
+.lc{margin-right:48px}
+.lc-grid span{right:-48px;top:-8px;width:44px;padding:0;background:none;text-align:left}
+.prof-more .prof-sub:first-child{margin-top:0}
+.prof-card.prof-more{align-self:stretch}
+.lc{margin-right:62px}
+.lc-grid span{right:-62px;width:58px;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

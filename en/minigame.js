@@ -14,7 +14,11 @@ function sequence(seed){const ids=ctx.catalog().champions.map(c=>c.id).sort();co
 const champ=id=>ctx.catalog().champions.find(c=>c.id===id);
 function current(){if(!me.game)return null;const seq=sequence(me.game.seed);return champ(seq[me.cur%seq.length]);}
 const letterCount=name=>[...name].filter(isLetter).length;
-function revealed(name,now=Date.now()){return Math.min(letterCount(name)-1,1+Math.floor(Math.max(0,now-champStart)/STEP));}
+// Schwerer Modus (gleicher Schalter wie bei den anderen Minispielen): kein Anfangsbuchstabe, langsamer, kein Titel-Hinweis.
+const hardPref=()=>{try{return!!JSON.parse(localStorage.getItem('riftroom.hard')||'{}').on;}catch{return false;}};
+const isHardGame=()=>!!me.game?.hard;
+const stepMs=()=>isHardGame()?STEP*1.5:STEP;
+function revealed(name,now=Date.now()){return Math.min(letterCount(name)-1,(isHardGame()?0:1)+Math.floor(Math.max(0,now-champStart)/stepMs()));}
 
 function setPresence(){if(room)room.presence({nick:me.nick.slice(0,24),state:me.state,game:me.game,score:me.score,cur:me.cur}).catch(()=>{});}
 function activeGame(now=Date.now()){
@@ -35,12 +39,12 @@ function adopt(){
  const g=activeGame();if(!g||g.id===me.game?.id)return;
  joinGame(g);
 }
-function joinGame(g){me.game={id:g.id,seed:g.seed,start:g.start,dur:g.dur,host:String(g.host||'').slice(0,24)};me.state='play';me.score=0;me.cur=0;streak=0;busy=false;lastCount=null;champStart=Math.max(Date.now(),g.start);setPresence();ctx.rerender();}
+function joinGame(g){me.game={id:g.id,seed:g.seed,start:g.start,dur:g.dur,host:String(g.host||'').slice(0,24),hard:!!g.hard};me.state='play';me.score=0;me.cur=0;streak=0;busy=false;lastCount=null;champStart=Math.max(Date.now(),g.start);setPresence();ctx.rerender();}
 // In einer Lobby: eigener Raum, Startwert und Dauer kommen vom Host, gestartet wird bei allen gleichzeitig.
-export async function startLobbyGuess({name,seed,start,dur:d,nick,host,c}){
+export async function startLobbyGuess({name,seed,start,dur:d,nick,host,c,hard=false}){
  if(c)ctx=c;lobbyMode=true;try{room?.leave?.();}catch{}room=null;peers=[];
  me.nick=String(nick||'').slice(0,24);dur=d;
- joinGame({id:'lb-'+name,seed,start,dur:d,host});
+ joinGame({id:'lb-'+name,seed,start,dur:d,host,hard});
  try{room=await joinLive(name);if(room&&lobbyMode){room.onPeers(list=>{peers=list;paintBoard();},()=>{room=null;paintBoard();});setPresence();}}catch{room=null;}
  paintBoard();
 }
@@ -51,7 +55,7 @@ export function leaveLobbyGuess(){
 export function lobbyGuessResult(){return lobbyMode&&me.game?{done:me.state==='done',rows:standings(me.game)}:null;}
 function startGame(){
  if(!me.nick.trim()){ctx.toast('Enter your name first.',true);document.getElementById('mg-nick')?.focus();return;}
- joinGame({id:Math.random().toString(36).slice(2,10),seed:Math.floor(Math.random()*2**31),start:Date.now()+4000,dur,host:me.nick});
+ joinGame({id:Math.random().toString(36).slice(2,10),seed:Math.floor(Math.random()*2**31),start:Date.now()+4000,dur,host:me.nick,hard:hardPref()});
 }
 function finish(){
  if(me.state!=='play')return;
@@ -123,6 +127,7 @@ export function renderMini(c){
   <p class="mg-rules">Everyone gets the same champions. One more letter every 5 seconds. Guess right to move on. Whoever has the most at the end wins.</p>
   <div class="mg-setup"><input class="field mg-nickin" id="mg-nick" maxlength="24" value="${ctx.esc(me.nick)}" placeholder="Your in-game name" aria-label="Your in-game name" autocomplete="off">
    <div class="mg-durs" role="group" aria-label="Duration">${[60000,90000,120000].map(d=>`<button data-mg-dur="${d}" aria-pressed="${dur===d}">${d/1000}s</button>`).join('')}</div></div>
+  <div class="pz-hard"><button class="hard-btn" data-mg-hard="1" aria-pressed="${hardPref()}"><span class="hb-dot"></span>Hard</button><span class="fine">${hardPref()?'Hard: no starting letter, letters come slower, no title hint.':'Too easy? Turn on hard mode.'}</span></div>
   <button class="mg-go" data-mg="start"><span>${me.state==='done'?'Again':'Start game'}</span></button>
  </div></section>`;
  return`<div class="mg-grid">${res?`<div class="mg-main">${res}${hero}</div>`:hero}${board}</div>`;
@@ -173,16 +178,16 @@ function paintRound(changed){
  if(lastCount!==null&&lastCount!==0){lastCount=0;const st=document.getElementById('mg-stage');const go=document.createElement('span');go.className='mg-gotext';go.textContent='GO!';st?.appendChild(go);setTimeout(()=>go.remove(),900);changed=true;}
  if(busy)return;
  const n=revealed(c.name,now),len=letterCount(c.name);
- if(changed||word.dataset.id!==c.id){word.innerHTML=tiles(c.name,n,'');word.dataset.id=c.id;word.dataset.n=n;word.classList.remove('wrong');if(ghost)ghost.src=`img/sq/${c.id}.webp`;}
+ if(changed||word.dataset.id!==c.id){word.innerHTML=tiles(c.name,n,'');word.dataset.id=c.id;word.dataset.n=n;word.classList.remove('wrong');if(ghost){ghost.style.transition='none';ghost.style.opacity='0';ghost.style.filter='blur(32px) brightness(.35) saturate(.3)';ghost.src=`img/sq/${c.id}.webp`;void ghost.offsetWidth;ghost.style.transition='';}}
  else if(word.dataset.n!==String(n)){
   // nur die neu aufgedeckten Kacheln umdrehen
   const ts=[...word.querySelectorAll('.mg-l')];ts.forEach((t,i)=>{if(i<n&&!t.classList.contains('on')){t.classList.add('on','flip');const letters=[...c.name].filter(isLetter);t.firstElementChild.textContent=letters[i].toUpperCase();}});word.dataset.n=n;
  }
- if(ghost)ghost.style.filter=`blur(${Math.round(22-14*(n/Math.max(1,len-1)))}px) brightness(.45) saturate(.6)`;
+ if(ghost){const f=n/Math.max(1,len-1);ghost.style.opacity=isHardGame()?'0':String(+(f*.14).toFixed(3));ghost.style.filter=`blur(${Math.round(32-10*f)}px) brightness(.35) saturate(.3)`;}
  const el=now-champStart;
- hint.textContent=el>=2*STEP&&c.title?`Hint: ${c.title}`:`${len} letters`;
- if(nx)nx.style.width=n<len-1?`${(el%STEP)/STEP*100}%`:'0%';
- if(n>=len-1&&el>=(len-1)*STEP+STEP)skip();
+ hint.textContent=!isHardGame()&&el>=2*STEP&&c.title?`Hint: ${c.title}`:`${len} letters`;
+ if(nx)nx.style.width=n<len-1?`${(el%stepMs())/stepMs()*100}%`:'0%';
+ if(n>=len-1&&el>=(len-1)*stepMs()+stepMs())skip();
  if(left<=0)finish();
 }
 // Nach jedem Rendern der Seite aufrufen.
@@ -194,6 +199,7 @@ export function mountMini(c){
 export function handleMiniClick(el){
  if(el.dataset.mg==='start'){startGame();return true;}
  if(el.dataset.mg==='skip'){skip();document.getElementById('mg-input')?.focus();return true;}
+ if(el.dataset.mgHard){try{localStorage.setItem('riftroom.hard',JSON.stringify({on:!hardPref()}));}catch{}ctx.rerender();return true;}
  if(el.dataset.mgDur){dur=Number(el.dataset.mgDur);document.querySelectorAll('[data-mg-dur]').forEach(b=>b.setAttribute('aria-pressed',String(b===el)));return true;}
  return false;
 }

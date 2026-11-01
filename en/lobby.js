@@ -4,7 +4,7 @@
 // dieselben Aufgaben und meldet nur Punkte und Fortschritt zurück. Gespeichert wird nichts.
 // Verlässt der Host die Lobby, übernimmt automatisch, wer am längsten da ist.
 import {joinLive,canLive} from './live.js';
-import {mpReady,mpGen,mpSig,mpGrade,mpMax,mpCard,MP_SECS} from './puzzles.js';
+import {mpReady,mpGen,mpSig,mpGrade,mpMax,mpCard,mpSecs,isHard} from './puzzles.js';
 import {startLobbyGuess,leaveLobbyGuess,lobbyGuessResult} from './minigame.js';
 
 const NICK_KEY='riftroom.nick',MAX=4,ALPHA='ABCDEFGHJKMNPQRSTUVWXYZ23456789',COUNT_IN=4000;
@@ -14,7 +14,7 @@ const COUNTS=[5,10,15],DURS=[60,90,120];
 let ctx=null,room=null,code='',status='idle',err='',peers=[],unsub=null,presetCode='';
 const me={id:Math.random().toString(36).slice(2,10),nick:'',at:0};
 let host=false,cfg=null,lastCfg=null,claimTimer=null,tick=null;
-let setup={game:'counter',n:10,dur:90};
+let setup={game:'counter',n:10,dur:90,hard:isHard()};
 let match=null,pending=null,seen={},celebrated='',lastKey='';
 
 const esc=v=>ctx.esc(v);
@@ -32,7 +32,7 @@ function validCfg(c){
  if(!c||typeof c!=='object'||!GAMES[c.game]||!['lobby','play'].includes(c.phase))return null;
  const n=c.game==='guess'?(DURS.includes(c.n)?c.n:90):(COUNTS.includes(c.n)?c.n:GAMES[c.game][2]);
  const players=Array.isArray(c.players)?c.players.filter(x=>typeof x==='string').slice(0,MAX):[];
- return{game:c.game,n,phase:c.phase,r:Number.isInteger(c.r)?c.r:0,seed:Number.isInteger(c.seed)?c.seed:0,players,sig:typeof c.sig==='string'?c.sig.slice(0,40):''};
+ return{game:c.game,n,hard:!!c.hard,phase:c.phase,r:Number.isInteger(c.r)?c.r:0,seed:Number.isInteger(c.seed)?c.seed:0,players,sig:typeof c.sig==='string'?c.sig.slice(0,40):''};
 }
 function people(){
  const out=new Map();
@@ -58,7 +58,7 @@ function onPeers(list){
  // Zwei Hosts: der früher Gekommene bleibt.
  if(host&&h&&!h.me){host=false;cfg=null;push();}
  // Kein Host da: nach kurzer Wartezeit übernimmt, wer am längsten in der Lobby ist.
- if(!h&&!claimTimer)claimTimer=setTimeout(()=>{claimTimer=null;if(!room||hostPerson())return;const first=people()[0];if(first?.me){host=true;cfg=lastCfg?{...lastCfg}:{game:setup.game,n:setup.game==='guess'?setup.dur:setup.n,phase:'lobby',r:0,seed:0,players:[],sig:''};push();update(true);}else update();},2500);
+ if(!h&&!claimTimer)claimTimer=setTimeout(()=>{claimTimer=null;if(!room||hostPerson())return;const first=people()[0];if(first?.me){host=true;cfg=lastCfg?{...lastCfg}:{game:setup.game,n:setup.game==='guess'?setup.dur:setup.n,hard:!!setup.hard,phase:'lobby',r:0,seed:0,players:[],sig:''};push();update(true);}else update();},2500);
  sync();
 }
 function sync(){
@@ -73,14 +73,14 @@ function startMatch(c){
  endMatch();seen={};
  if(c.game==='guess'){
   match={r:c.r,game:'guess'};
-  startLobbyGuess({name:`rr-g-${code.toLowerCase()}-${c.r}`,seed:c.seed,start:Date.now()+COUNT_IN,dur:c.n*1000,nick:me.nick,host:hostPerson()?.nick||'',c:ctx.mg});
+  startLobbyGuess({name:`rr-g-${code.toLowerCase()}-${c.r}`,seed:c.seed,start:Date.now()+COUNT_IN,dur:c.n*1000,nick:me.nick,host:hostPerson()?.nick||'',c:ctx.mg,hard:!!c.hard});
   if(ctx.page()==='mini')ctx.setTab('guess');else ctx.toast('Guess the Champion is starting in your lobby.');
   return;
  }
  const wait=mpReady(c.game,ctx.pz);
  if(wait){pending=c;return;}
- const qs=mpGen(c.game,c.seed,c.n);
- match={r:c.r,game:c.game,qs,n:qs.length,i:0,answers:[],gains:[],marks:'',pts:0,ms:0,shownAt:0,deadline:0,done:false,start:Date.now()+COUNT_IN,sigOk:!c.sig||mpSig(c.game,qs)===c.sig};
+ const qs=mpGen(c.game,c.seed,c.n,c.hard);
+ match={r:c.r,game:c.game,hard:!!c.hard,qs,n:qs.length,i:0,answers:[],gains:[],marks:'',pts:0,ms:0,shownAt:0,deadline:0,done:false,start:Date.now()+COUNT_IN,sigOk:!c.sig||mpSig(c.game,qs)===c.sig};
  push();
  if(ctx.page()==='mini'&&ctx.tab()!=='lobby')ctx.setTab('lobby');
  else if(ctx.page()!=='mini')ctx.toast('The round in your lobby is starting. Open “With friends”.');
@@ -113,11 +113,11 @@ function paint(){
 }
 
 /* ---------- Ansichten ---------- */
-function gamePicker(sel,n,edit){
+function gamePicker(sel,n,edit,hard=false){
  const tiles=Object.entries(GAMES).map(([k,[l,art]],i)=>`<button class="lb-game ${sel===k?'on':''}" data-lb-game="${k}" aria-pressed="${sel===k}" style="--i:${i}" ${edit?'':'disabled'}><img src="${ctx.LOADING[art]}" alt=""><b>${l}</b></button>`).join('');
  const opts=sel==='guess'?DURS:COUNTS;
  const seg=`<div class="seg lb-count" role="group" aria-label="${sel==='guess'?'Duration':'Questions'}">${opts.map(v=>`<button data-lb-n="${v}" aria-pressed="${n===v}" ${edit?'':'disabled'}>${sel==='guess'?v+' s':v}</button>`).join('')}</div>`;
- return`<div class="lb-games">${tiles}</div><div class="lb-countrow"><span class="fine">${sel==='guess'?'Duration':'Questions per round'}</span>${seg}</div>`;
+ return`<div class="lb-games">${tiles}</div><div class="lb-countrow"><button class="hard-btn" data-lb-hard="1" aria-pressed="${!!hard}" ${edit?'':'disabled'}><span class="hb-dot"></span>Hard</button><span class="fine">${sel==='guess'?'Duration':'Questions per round'}</span>${seg}</div>`;
 }
 function startScreen(){
  const nick=me.nick||nickOf();
@@ -129,7 +129,7 @@ function startScreen(){
   <p class="mg-rules">1 vs 1 or up to four players. Everyone gets the same questions, and whoever scores the most points wins.</p>
   <input class="field lb-nick" id="lb-nick" maxlength="24" value="${esc(nick)}" placeholder="Your name in the game" aria-label="Your name in the game" autocomplete="off">
   ${err?`<p class="lb-err">${esc(err)}</p>`:''}
-  <div class="lb-create">${gamePicker(setup.game,setup.game==='guess'?setup.dur:setup.n,true)}</div>
+  <div class="lb-create">${gamePicker(setup.game,setup.game==='guess'?setup.dur:setup.n,true,setup.hard)}</div>
   <button class="mg-go" data-lb="create" ${busy?'disabled':''}><span>${busy?'Connecting …':'Create lobby'}</span></button>
   <div class="lb-join"><span class="fine">Or join a lobby</span><div class="row"><input class="field lb-codein" id="lb-code" maxlength="5" value="${esc(presetCode)}" placeholder="CODE" aria-label="Lobby code" autocomplete="off" spellcheck="false"><button class="btn primary" data-lb="join" ${busy?'disabled':''}>Join</button></div></div>
  </div></section>`;
@@ -150,7 +150,7 @@ function lobbyRoom(c){
  const info=GAMES[c.game];
  // Daten fürs gewählte Spiel schon in der Lobby laden, damit der Start nicht warten muss.
  const loadingData=c.game!=='guess'&&!!mpReady(c.game,ctx.pz);
- const setupHtml=mine?gamePicker(c.game,c.n,true):`<div class="lb-chosen"><img src="${ctx.LOADING[info[1]]}" alt=""><div><span class="fine">Selected game</span><b>${info[0]}</b><span>${c.game==='guess'?`${c.n} seconds`:`${c.n} questions`}</span></div></div>`;
+ const setupHtml=mine?gamePicker(c.game,c.n,true,c.hard):`<div class="lb-chosen"><img src="${ctx.LOADING[info[1]]}" alt=""><div><span class="fine">Selected game</span><b>${info[0]}</b><span>${c.game==='guess'?`${c.n} seconds`:`${c.n} questions`}${c.hard?' · Hard':''}</span></div></div>`;
  const act=mine?`<button class="mg-go" id="lb-start" data-lb="start" ${n<2||loadingData?'disabled':''}><span>${loadingData?'Loading data …':n<2?'Waiting for players':'Start game'}</span></button>`:'<p class="lb-wait"><span class="spinner small"></span>Waiting for the host to start</p>';
  return`<section class="card lb-room">${roomHead()}<div class="lb-slots" id="lb-slots">${slotsHtml()}</div><p class="fine lb-tip">${n<2?'Send your friends the code. As soon as someone joins, you can start.':'Up to four play, everyone else watches.'}</p><div class="lb-setup">${setupHtml}</div><div class="lb-actions">${act}<button class="btn ghost" data-lb="leave">Leave lobby</button></div></section>`;
 }
@@ -166,7 +166,7 @@ function countdown(c){
 }
 function playView(c){
  const q=match.qs[match.i],ans=match.answers[match.i],last=match.i+1>=match.n;
- if(!match.shownAt&&ans==null){match.shownAt=Date.now();if(match.game==='timer')match.deadline=match.shownAt+MP_SECS*1000;}
+ if(!match.shownAt&&ans==null){match.shownAt=Date.now();if(match.game==='timer')match.deadline=match.shownAt+mpSecs(match.hard)*1000;}
  const left=match.game==='timer'&&ans==null?Math.max(0,(match.deadline-Date.now())/1000):0;
  const next=`<button class="btn primary" data-lb="next">${last?'Done':'Next'}</button>`;
  const top=`<div class="lb-qtop"><span class="mg-badge">${GAMES[c.game][0]}</span><span class="fine">Question <b>${match.i+1}</b> of ${match.n}</span><span class="fine">Points: <b>${match.pts}</b></span></div>`;
@@ -219,7 +219,7 @@ export function afterLobby(){
  if(!match||match.game==='guess'||!c)return;
  if(Date.now()<match.start){tick=setInterval(()=>{const el=document.getElementById('lb-count');if(!el){stopTick();return;}const left=Math.ceil((match.start-Date.now())/1000);if(left<=0){stopTick();ctx.rerender();return;}if(el.textContent!==String(left)){const n=el.cloneNode(false);n.textContent=left;el.replaceWith(n);}},100);return;}
  if(match.game==='timer'&&!match.done&&match.answers[match.i]==null){
-  tick=setInterval(()=>{const ring=document.getElementById('mp-ring'),num=document.getElementById('mp-left');if(!ring){stopTick();return;}const left=Math.max(0,match.deadline-Date.now());ring.style.setProperty('--p',String(left/(MP_SECS*1000)));if(num)num.textContent=Math.ceil(left/1000);if(!left){stopTick();answer(-1);}},100);
+  tick=setInterval(()=>{const ring=document.getElementById('mp-ring'),num=document.getElementById('mp-left');if(!ring){stopTick();return;}const left=Math.max(0,match.deadline-Date.now());ring.style.setProperty('--p',String(left/(mpSecs(match.hard)*1000)));if(num)num.textContent=Math.ceil(left/1000);if(!left){stopTick();answer(-1);}},100);
  }
  const res=document.getElementById('lb-result');
  if(res&&celebrated!==code+c.r){celebrated=code+c.r;if(ranked(c)[0]?.me)setTimeout(()=>ctx.burst(res,60),300);}
@@ -238,7 +238,7 @@ async function enter(c,asHost){
  try{
   const r=await joinLive('rr-lobby-'+c.toLowerCase());if(!r)throw Error('none');
   room=r;code=c;me.at=Date.now();status='in';presetCode='';seen={};
-  if(asHost){host=true;cfg={game:setup.game,n:setup.game==='guess'?setup.dur:setup.n,phase:'lobby',r:0,seed:0,players:[],sig:''};}
+  if(asHost){host=true;cfg={game:setup.game,n:setup.game==='guess'?setup.dur:setup.n,hard:!!setup.hard,phase:'lobby',r:0,seed:0,players:[],sig:''};}
   unsub=room.onPeers(onPeers,()=>{room=null;status='idle';err='The connection to the lobby was lost.';ctx.rerender();});
   push();
   if(ctx.standalone)try{history.replaceState(null,'',`${location.pathname}?lobby=${c}`);}catch{}
@@ -260,7 +260,7 @@ function startRound(){
  let sig='';
  if(c.game!=='guess'){
   if(mpReady(c.game,ctx.pz)){ctx.toast('The game data is still loading. Try again in a moment.',true);ctx.rerender();return;}
-  const qs=mpGen(c.game,seed,c.n);if(!qs.length){ctx.toast('Data for this game is missing right now.',true);return;}
+  const qs=mpGen(c.game,seed,c.n,c.hard);if(!qs.length){ctx.toast('Data for this game is missing right now.',true);return;}
   sig=mpSig(c.game,qs);
  }
  setCfg({phase:'play',r:c.r+1,seed,players:line.map(p=>p.id),sig});
@@ -284,6 +284,7 @@ export function handleLobbyClick(el){
  const d=el.dataset;
  if(d.lobbyNew){if(GAMES[d.lobbyNew]){setup.game=d.lobbyNew;setup.n=GAMES[d.lobbyNew][2];}ctx.setTab('lobby');return true;}
  if(d.lbGame){if(room){if(isHost())setCfg({game:d.lbGame,n:d.lbGame==='guess'?90:GAMES[d.lbGame][2]});}else{setup.game=d.lbGame;if(d.lbGame!=='guess')setup.n=GAMES[d.lbGame][2];ctx.rerender();}return true;}
+ if(d.lbHard){if(room){if(isHost())setCfg({hard:!current()?.hard});}else{setup.hard=!setup.hard;ctx.rerender();}return true;}
  if(d.lbN){const v=Number(d.lbN);if(room){if(isHost())setCfg({n:v});}else{if(setup.game==='guess')setup.dur=v;else setup.n=v;ctx.rerender();}return true;}
  if(d.mpPick!=null){const g=match?.game;answer(g==='macro'||g==='timer'?Number(d.mpPick):d.mpPick);return true;}
  const a=d.lb;if(!a)return false;

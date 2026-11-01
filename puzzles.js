@@ -1,6 +1,6 @@
 // Minispiele mit Wertung, ähnlich wie Puzzles auf Chess.com:
 // Counter-Puzzle: Gegner und Rolle sind vorgegeben, du wählst aus vier Champions den besten Konter.
-//   Bewertet wird mit echten Matchup-Winrates (Lolalytics, Emerald+). Deine Wertung steigt und fällt wie eine Elo-Zahl.
+//   Bewertet wird mit echten Matchup-Winrates (Lolalytics, Master+). Deine Wertung steigt und fällt wie eine Elo-Zahl.
 // Tägliches Puzzle: fünf Counter-Puzzles, für alle gleich, mit Rangliste.
 // Wer gewinnt?: zwei Drafts, welches Team liegt laut Lane-Duellen vorne.
 // Ban-Puzzle: ein Gegnerteam mit Pools, welcher Ban tut am meisten weh.
@@ -14,7 +14,7 @@ const ROLE_LABEL={TOP:'Top',JUNGLE:'Jungle',MIDDLE:'Mid',BOTTOM:'Bot',UTILITY:'S
 const LETTER_ROLE={T:'Top',J:'Jungle',M:'Mid',A:'ADC',S:'Support'};
 const OBJ_NAME={drake:'Drache',baron:'Baron',grubs:'Leerenkriecher',herald:'Herold',tower:''};
 const OBJ_STATE={up:'lebt',taken:'genommen',fight:'Kampf',buff:'Gegner hat Buff',enemy:'Gegner dran'};
-const MIN_GAMES=400;
+const MIN_GAMES=130;
 
 const load=(k,d)=>{try{return{...d,...JSON.parse(localStorage.getItem(k)||'{}')};}catch{return{...d};}};
 const store=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch{}};
@@ -23,6 +23,11 @@ let mqs=load(MQ_KEY,{best:0,rounds:0,seen:[]});
 let wws=load(WW_KEY,{streak:0,best:0,played:0,right:0});
 let bps=load(BP_KEY,{played:0,points:0,streak:0,best:0});
 let tqs=load(TQ_KEY,{best:0,rounds:0});
+// Schwerer Modus: knappere Antworten, weniger Zeit, kniffligere Fragen. Gilt für alle Minispiele (außer dem täglichen Puzzle).
+const HARD_KEY='riftroom.hard';let HARD=!!load(HARD_KEY,{on:false}).on;
+export const isHard=()=>HARD;
+export function setHard(v){HARD=!!v;store(HARD_KEY,{on:HARD});}
+const hardToggle=()=>`<div class="pz-hard"><button class="hard-btn" data-pz-hard="1" aria-pressed="${HARD}"><span class="hb-dot"></span>Schwer</button><span class="fine">${HARD?'Schwer: knappere Antworten, weniger Zeit, kniffligere Fragen.':'Zu leicht? Schalte den schweren Modus ein.'}</span></div>`;
 const de=()=>document.documentElement.lang==='de';
 const pct=v=>de()?v.toFixed(1).replace('.',',')+' %':v.toFixed(1)+'%';
 const int=v=>Number(v).toLocaleString(de()?'de-DE':'en-US');
@@ -35,12 +40,14 @@ function seeded(str){let h=1779033703^str.length;for(let i=0;i<str.length;i++){h
 const withRng=(rng,fn)=>{const old=R;R=rng;try{return fn();}finally{R=old;}};
 // Winrate mit 200 virtuellen Spielen Richtung 50 % geglättet, damit kleine Stichproben nicht täuschen.
 const adj=(wr,n)=>(wr*n+50*200)/(n+200);
+// Für Lane-Duelle (Master+, kleinere Stichproben): 70 virtuelle Spiele.
+const adjM=(wr,n)=>(wr*n+50*70)/(n+70);
 const name=id=>ctx.esc(ctx.cname(id));
 const icon=id=>`<img src="${ctx.SQUARE[id]}" alt="">`;
 const spinner='<section class="card pz-loading"><div class="spinner"></div></section>';
 // Startbildschirm wie bei „Champion raten“: Titel, Regeln, Stand und ein großer Start-Knopf.
-function hero({art,badge,t1,t2,rules,demo='',extra='',stats='',btn,act,friends=''}){
- return`<section class="mg-hero pz-hero"><img class="pz-hero-art" src="${ctx.LOADING[art]||''}" alt=""><div class="mg-hero-in"><span class="mg-badge">${badge}</span><h1 class="mg-title"><span>${t1}</span><span>${t2}</span></h1>${demo?`<div class="pz-demo" aria-hidden="true">${demo}</div>`:''}<p class="mg-rules">${rules}</p>${stats?`<div class="pz-hero-stats">${stats}</div>`:''}${extra}<button class="mg-go" ${act}><span>${btn}</span></button>${friends&&ctx.friendsBtn?ctx.friendsBtn(friends):''}</div></section>`;
+function hero({art,badge,t1,t2,rules,demo='',extra='',stats='',btn,act,friends='',daily=false}){
+ return`<section class="mg-hero pz-hero"><img class="pz-hero-art" src="${ctx.LOADING[art]||''}" alt=""><div class="mg-hero-in"><span class="mg-badge">${badge}</span><h1 class="mg-title"><span>${t1}</span><span>${t2}</span></h1>${demo?`<div class="pz-demo" aria-hidden="true">${demo}</div>`:''}<p class="mg-rules">${rules}</p>${stats?`<div class="pz-hero-stats">${stats}</div>`:''}${extra}${daily?'':hardToggle()}<button class="mg-go" ${act}><span>${btn}</span></button>${friends&&ctx.friendsBtn?ctx.friendsBtn(friends):''}</div></section>`;
 }
 const stat=(v,l)=>`<span><b>${v}</b>${l}</span>`;
 // Ergebnis einer Runde: große Zahl, Kästchen pro Aufgabe, Nochmal-Knopf.
@@ -59,21 +66,24 @@ const dataError=n=>`<section class="card empty"><h2>Daten nicht erreichbar</h2><
 const known=id=>ctx.catalog().champions.some(c=>c.id===id);
 
 /* ---------- Counter-Puzzle ---------- */
-function makePuzzle(roles){
+function makePuzzle(roles,hard=HARD){
  for(let tries=0;tries<80;tries++){
   const role=pick(roles),table=mu.roles[role]||{},enemies=Object.keys(table).filter(known).sort();if(!enemies.length)continue;
   const enemy=pick(enemies);
-  const rows=table[enemy].filter(r=>r[2]>=MIN_GAMES&&known(r[0])).map(([id,wr,n])=>({id,wr,n,a:adj(wr,n)})).sort((x,y)=>y.a-x.a||(x.id<y.id?-1:1));
+  const rows=table[enemy].filter(r=>r[2]>=MIN_GAMES&&known(r[0])).map(([id,wr,n])=>({id,wr,n,a:adjM(wr,n)})).sort((x,y)=>y.a-x.a||(x.id<y.id?-1:1));
   if(rows.length<8)continue;
-  const best=rows[0];if(best.a-rows[1].a<0.6||best.a<51)continue;
+  const best=rows[0];if(best.a-rows[1].a<(hard?0.3:0.6)||best.a<51)continue;
   const rest=rows.slice(1),used=new Set([best.id]);
   const take=list=>{const c=list.filter(r=>!used.has(r.id));if(!c.length)return null;const r=pick(c);used.add(r.id);return r;};
-  const opts=[best,take(rest.filter(r=>r.a>=50.5&&r.a<=best.a-0.6)),take(rest.filter(r=>r.a<48.5)),take(rest.filter(r=>r.a<=best.a-0.6))].filter(Boolean);
-  while(opts.length<4){const r=take(rest);if(!r)break;opts.push(r);}
-  if(opts.length<4)continue;
+  // Schwer: fünf Angebote, alle nah am besten Konter (keine offensichtlich schlechten).
+  const close=r=>r.a>=best.a-2.5&&r.a<=best.a-0.3,N=hard?5:4;
+  const opts=hard?[best,take(rest.filter(close)),take(rest.filter(close)),take(rest.filter(close)),take(rest.filter(r=>r.a>=48.5&&r.a<=best.a-0.3))].filter(Boolean)
+   :[best,take(rest.filter(r=>r.a>=50.5&&r.a<=best.a-0.6)),take(rest.filter(r=>r.a<48.5)),take(rest.filter(r=>r.a<=best.a-0.6))].filter(Boolean);
+  while(opts.length<N){const r=take(hard?rest.filter(r=>r.a<=best.a-0.3):rest);if(!r)break;opts.push(r);}
+  if(opts.length<N)continue;
   // Schwierigkeit: je knapper der Abstand zwischen bestem und zweitbestem Angebot, desto schwerer.
   const second=Math.max(...opts.slice(1).map(o=>o.a));
-  return{role,enemy,opts:shuffle(opts),bestId:best.id,diff:Math.round(Math.min(1700,Math.max(700,1650-(best.a-second)*180))),answer:null,delta:0};
+  return{role,enemy,opts:shuffle(opts),bestId:best.id,diff:Math.round(Math.min(hard?1950:1700,Math.max(700,1650-(best.a-second)*180+(hard?250:0)))),answer:null,delta:0};
  }
  return null;
 }
@@ -107,7 +117,7 @@ const dotsOf=(list,i,n)=>Array.from({length:n},(_,k)=>`<i class="${list[k]||''} 
 function counterHtml(){
  if(!mu){fetchData('matchups');return loading.matchups==='error'?dataError('matchups'):spinner;}
  const roleSeg=`<div class="seg pz-roles" role="group" aria-label="Rolle">${['ALL',...ROLE_KEYS].map(r=>`<button data-pz-role="${r}" aria-pressed="${pz.role===r}">${r==='ALL'?'Alle':ROLE_LABEL[r]}</button>`).join('')}</div>`;
- if(!cr)return hero({art:'Yasuo',badge:'Minispiel',t1:'Counter',t2:'Puzzle',rules:`Du siehst einen Gegner und wählst aus vier Champions den besten Konter. ${CP_N} Puzzles pro Runde. Deine Wertung steigt und fällt wie bei Chess.com.`,demo:['?','?','★','?'].map((x,i)=>`<span class="pz-demo-card ${x==='★'?'hit':''}" style="--i:${i}">${x}</span>`).join(''),stats:stat(pz.rating,'Wertung')+stat(pz.best,'beste Serie')+stat(pz.games,'gespielt'),extra:`<div class="pz-hero-roles"><span class="fine">Rolle</span>${roleSeg}</div>`,btn:'Runde starten',act:'data-pz="start"',friends:'counter'});
+ if(!cr)return hero({art:'Yasuo',badge:'Minispiel',t1:'Counter',t2:'Puzzle',rules:`Du siehst einen Gegner und wählst aus ${HARD?'fünf':'vier'} Champions den besten Konter. ${CP_N} Puzzles pro Runde. Deine Wertung steigt und fällt wie bei Chess.com.`,demo:['?','?','★','?'].map((x,i)=>`<span class="pz-demo-card ${x==='★'?'hit':''}" style="--i:${i}">${x}</span>`).join(''),stats:stat(pz.rating,'Wertung')+stat(pz.best,'beste Serie')+stat(pz.games,'gespielt'),extra:`<div class="pz-hero-roles"><span class="fine">Rolle</span>${roleSeg}</div>`,btn:'Runde starten',act:'data-pz="start"',friends:'counter'});
  if(cr.done){const gain=pz.rating-cr.from;return roundEnd({badge:'Runde fertig',pre:gain>=0?'+':'−',big:Math.abs(gain),unit:'Wertung',sq:cr.grades.map(sqOf).join(''),text:`${cr.grades.filter(g=>g==='best').length} von ${CP_N} perfekt gelöst. Deine Wertung: ${pz.rating}.`,act:'data-pz="start"'});}
  if(!cp)newPuzzle();
  if(!cp)return'<section class="card empty"><h2>Kein Puzzle gefunden</h2><p>Für diese Rolle gibt es gerade zu wenige Daten. Wähle eine andere Rolle.</p></section>';
@@ -122,7 +132,7 @@ function todayKey(){const d=new Date();return`${d.getFullYear()}-${String(d.getM
 const pid=()=>{try{let v=localStorage.getItem(PID_KEY);if(!v){v=Math.random().toString(36).slice(2,12)+Math.random().toString(36).slice(2,12);localStorage.setItem(PID_KEY,v);}return v;}catch{return'gast';}};
 function initDaily(){
  const date=todayKey(),rng=seeded('riftroom-daily-'+date+'-'+mu.patch);
- const puzzles=withRng(rng,()=>shuffle(ROLE_KEYS).map(r=>makePuzzle([r])).filter(Boolean)).slice(0,DAILY_N);
+ const puzzles=withRng(rng,()=>shuffle(ROLE_KEYS).map(r=>makePuzzle([r],false)).filter(Boolean)).slice(0,DAILY_N);
  const saved=load(DAILY_KEY,{});
  daily={date,puzzles,i:0,ms:0,shownAt:0,done:false,submitted:false,board:null,boardState:''};
  if(saved.date===date&&Array.isArray(saved.answers)){
@@ -167,7 +177,7 @@ function dailyHtml(){
  if(!mu){fetchData('matchups');return loading.matchups==='error'?dataError('matchups'):spinner;}
  if(!daily||daily.date!==todayKey())initDaily();
  const started=daily.started||daily.done||daily.puzzles.some(p=>p.answer);
- if(!started)return hero({art:'Ahri',badge:'Heute',t1:'Tägliches',t2:'Puzzle',rules:'Fünf Counter-Puzzles, eins pro Rolle, für alle gleich. Es zählt der erste Versuch. Danach trägst du dich in die Rangliste ein.',demo:['🟩','🟩','🟨','🟥','🟩'].map((x,i)=>`<span class="pz-demo-sq" style="--i:${i}">${x}</span>`).join(''),btn:'Puzzle starten',act:'data-dl="start"'});
+ if(!started)return hero({art:'Ahri',daily:true,badge:'Heute',t1:'Tägliches',t2:'Puzzle',rules:'Fünf Counter-Puzzles, eins pro Rolle, für alle gleich. Es zählt der erste Versuch. Danach trägst du dich in die Rangliste ein.',demo:['🟩','🟩','🟨','🟥','🟩'].map((x,i)=>`<span class="pz-demo-sq" style="--i:${i}">${x}</span>`).join(''),btn:'Puzzle starten',act:'data-dl="start"'});
  if(!daily.puzzles.length)return'<section class="card empty"><h2>Heute kein Puzzle</h2><p>Gerade fehlen Daten. Versuch es später noch einmal.</p></section>';
  const dateLabel=new Date().toLocaleDateString(de()?'de-DE':'en-US',{weekday:'long',day:'numeric',month:'long'});
  const dots=daily.puzzles.map((p,k)=>`<i class="${p.grade||''} ${k===daily.i&&!daily.done?'now':''}"></i>`).join('');
@@ -193,11 +203,11 @@ function weighted(list){const sum=list.reduce((s,x)=>s+x.w,0);let r=R()*sum;for(
 // Vorteil des blauen Champions im Duell gegen den roten, in Prozentpunkten über 50 %.
 function laneEdge(role,b,r,poolB,poolR){
  const t=mu?.roles?.[role]||{};
- const vs=(t[r]||[]).find(x=>x[0]===b);if(vs&&vs[2]>=300)return{edge:adj(vs[1],vs[2])-50,n:vs[2],src:'duel'};
- const vs2=(t[b]||[]).find(x=>x[0]===r);if(vs2&&vs2[2]>=300)return{edge:50-adj(vs2[1],vs2[2]),n:vs2[2],src:'duel'};
+ const vs=(t[r]||[]).find(x=>x[0]===b);if(vs&&vs[2]>=100)return{edge:adjM(vs[1],vs[2])-50,n:vs[2],src:'duel'};
+ const vs2=(t[b]||[]).find(x=>x[0]===r);if(vs2&&vs2[2]>=100)return{edge:50-adjM(vs2[1],vs2[2]),n:vs2[2],src:'duel'};
  return{edge:((poolB?.a||50)-(poolR?.a||50))/2,n:0,src:'wr'};
 }
-function makeDuel(){
+function makeDuel(hard=HARD){
  for(let tries=0;tries<60;tries++){
   const used=new Set(),blue=[],red=[],lanes=[];
   for(const role of ROLE_KEYS){
@@ -206,7 +216,7 @@ function makeDuel(){
    blue.push(b.id);red.push(r.id);lanes.push({role,b:b.id,r:r.id,...laneEdge(role,b.id,r.id,b,r)});
   }
   const total=lanes.reduce((s,l)=>s+l.edge,0);
-  if(Math.abs(total)<2.5)continue;
+  if(hard?(Math.abs(total)<0.8||Math.abs(total)>2.5):Math.abs(total)<2.5)continue;
   return{blue,red,lanes,total,win:Math.max(35,Math.min(65,50+total*0.9)),answer:null};
  }
  return null;
@@ -239,12 +249,12 @@ function duelView(ww,pickAttr,next){
 }
 
 /* ---------- Ban-Puzzle ---------- */
-function makeBan(){
+function makeBan(hard=HARD){
  for(let tries=0;tries<60;tries++){
   const used=new Set(),players=[];
   for(const role of ROLE_KEYS){
    const pool=rolePool(role).filter(x=>!used.has(x.id));if(pool.length<4)return null;
-   const n=2+Math.floor(R()*2),champs=[];
+   const n=hard?3:2+Math.floor(R()*2),champs=[];
    for(let k=0;k<n;k++){const c=weighted(pool.filter(x=>!used.has(x.id)));used.add(c.id);champs.push({id:c.id,meta:c.a});}
    const raw=champs.map(()=>0.5+R());const sum=raw.reduce((s,x)=>s+x,0);
    champs.forEach((c,k)=>{c.share=raw[k]/sum;c.wr=47+R()*8;});
@@ -252,7 +262,7 @@ function makeBan(){
   }
   // Ein Spieler hängt stark an einem Champion: das ist die beste Ban-Chance. Ein anderer hat einen breiten, guten Pool.
   const ot=Math.floor(R()*5),deep=(ot+1+Math.floor(R()*4))%5;
-  const o=players[ot];o.champs[0].share=0.66+R()*0.14;o.champs.slice(1).forEach(c=>{c.share=(1-o.champs[0].share)/(o.champs.length-1);c.wr=43+R()*4;});o.champs[0].wr=58+R()*5;
+  const o=players[ot];o.champs[0].share=hard?0.5+R()*0.12:0.66+R()*0.14;o.champs.slice(1).forEach(c=>{c.share=(1-o.champs[0].share)/(o.champs.length-1);c.wr=43+R()*4;});o.champs[0].wr=58+R()*5;
   players[deep].champs.forEach(c=>{c.wr=52+R()*3;});
   for(const p of players)for(const c of p.champs){
    const others=p.champs.filter(x=>x!==c),os=others.reduce((s,x)=>s+x.share,0);
@@ -261,7 +271,7 @@ function makeBan(){
    c.games=Math.max(1,Math.round(p.games*c.share));c.backup=backup;
   }
   const all=players.flatMap((p,i)=>p.champs.map(c=>({...c,pi:i}))).sort((a,b)=>b.impact-a.impact);
-  if(all[0].impact<all[1].impact*1.4)continue;
+  if(all[0].impact<all[1].impact*(hard?1.12:1.4))continue;
   return{players,rank:all.map(c=>c.id),bestId:all[0].id,answer:null};
  }
  return null;
@@ -292,7 +302,8 @@ function banView(bp,pickAttr,next){
 const ROUND=5;
 function scenList(){return scen?.[de()?'de':'en']||[];}
 function newRound(){
- const all=scenList();if(!all.length){mq=null;return;}
+ const every=scenList();if(!every.length){mq=null;return;}
+ const hardOnes=every.filter(s=>s.hard),all=HARD&&hardOnes.length>=ROUND?hardOnes:every;
  let fresh=all.filter(s=>!mqs.seen.includes(s.id));if(fresh.length<ROUND){mqs.seen=[];fresh=all;}
  mq={ids:shuffle(fresh).slice(0,ROUND).map(s=>s.id),i:0,points:0,answer:null,done:false};
 }
@@ -364,34 +375,47 @@ function nextMacro(){
 /* ---------- Timer-Quiz ---------- */
 // Feste Zeiten: Drache 5 Min. nach dem Tod, Baron 6 Min., Inhibitor 5 Min., Buffs 5 Min.
 // Abklingzeiten der Beschwörerzauber aus Riots Data Dragon (ohne Rabatt durch Runen oder Stiefel).
-const TQ_N=5,TQ_SECS=12;
+const TQ_N=5,TQ_SECS=12,TQ_SECS_HARD=7;
+const tqSecs=(hard=HARD)=>hard?TQ_SECS_HARD:TQ_SECS;
 const SPELLS=[['Blitz',300],['Entzünden',180],['Heilen',240],['Erschöpfen',240],['Barriere',180],['Läuterung',240],['Geist',240]];
 const FIRST=[['Drache',300],['Leerenkriecher',480],['Herold',900],['Baron',1200]];
 const rnd=(a,b)=>a+Math.floor(R()*(b-a+1));
-function makeTimerQ(){
- const kind=pick(['drake','drake','baron','inhib','buff','spell','spell','spell','first']);
+function makeTimerQ(hard=HARD){
+ const kind=pick(hard?['drake','baron','inhib','spell','spell','two','two','baronbuff']:['drake','drake','baron','inhib','buff','spell','spell','spell','first']);
  let q,ans,rule,alt=[];
+ if(kind==='two'){
+  const [a,b]=shuffle(SPELLS).slice(0,2),[n1,c1]=a,[n2,c2]=b,t1=rnd(150,1700),t2=t1+rnd(20,150);
+  const q=`Gegner benutzt ${n1} bei ${mmss(t1)} und ${n2} bei ${mmss(t2)}. Ab wann hat er beide wieder?`,ans=Math.max(t1+c1,t2+c2);
+  const alt=[Math.min(t1+c1,t2+c2),ans-30,ans+30,ans-15,ans+15];
+  const opts=[ans];for(const x of shuffle(alt))if(x>0&&!opts.includes(x)&&opts.length<4)opts.push(x);
+  return{kind,q,ans,rule:`${n1}: ${mmss(c1)}, ${n2}: ${mmss(c2)} Abklingzeit. Es zählt der spätere.`,opts:opts.sort((x,y)=>x-y),secs:tqSecs(hard)};
+ }
+ if(kind==='baronbuff'){
+  const t=rnd(1230,2100),q=`Baron bei ${mmss(t)} getötet. Wann läuft der Baron-Buff aus?`,ans=t+180,alt=[t+150,t+210,t+240,t+120];
+  const opts=[ans];for(const x of shuffle(alt))if(!opts.includes(x)&&opts.length<4)opts.push(x);
+  return{kind,q,ans,rule:'Der Baron-Buff hält 3 Minuten.',opts:opts.sort((x,y)=>x-y),secs:tqSecs(hard)};
+ }
  if(kind==='first'){
   const [n,t]=pick(FIRST);
   q=`Wann erscheint ${n} zum ersten Mal?`;ans=t;rule=`${n} erscheint zum ersten Mal bei ${mmss(t)}.`;
   alt=FIRST.map(f=>f[1]).filter(x=>x!==t).concat([600,360]);
  }else{
   const T={drake:[rnd(330,1800),300,'Drache','Der nächste Drache kommt 5 Minuten nach dem Tod des letzten.'],baron:[rnd(1230,2100),360,'Baron','Baron kommt 6 Minuten nach seinem Tod wieder.'],inhib:[rnd(1080,2400),300,'Inhibitor','Ein Inhibitor baut sich nach 5 Minuten wieder auf.'],buff:[rnd(120,1500),300,pick(['Blau-Buff','Rot-Buff']),'Blau- und Rot-Buff kommen 5 Minuten nach dem Tod wieder.']};
-  if(kind==='spell'){const [n,cd]=pick(SPELLS),t=rnd(150,1800);q=`Gegner benutzt ${n} bei ${mmss(t)}. Wann ist er wieder bereit?`;ans=t+cd;rule=`${n} hat ${mmss(cd)} Abklingzeit (ohne Rabatt durch Runen oder Stiefel).`;alt=[t+cd-60,t+cd+60,t+300,t+240,t+180,t+cd-30,t+cd+30];}
-  else{const [t,add,n,r]=T[kind];q=kind==='inhib'?`Inhibitor bei ${mmss(t)} zerstört. Wann ist er wieder da?`:`${n} bei ${mmss(t)} getötet. Wann ist er wieder da?`;ans=t+add;rule=r;alt=[t+add-60,t+add+60,t+(add===300?360:300),t+add-30,t+add+30];}
+  if(kind==='spell'){const [n,cd]=pick(SPELLS),t=rnd(150,1800);q=`Gegner benutzt ${n} bei ${mmss(t)}. Wann ist er wieder bereit?`;ans=t+cd;rule=`${n} hat ${mmss(cd)} Abklingzeit (ohne Rabatt durch Runen oder Stiefel).`;alt=hard?[t+cd-30,t+cd+30,t+cd-15,t+cd+15,t+(cd===300?240:300)]:[t+cd-60,t+cd+60,t+300,t+240,t+180,t+cd-30,t+cd+30];}
+  else{const [t,add,n,r]=T[kind];q=kind==='inhib'?`Inhibitor bei ${mmss(t)} zerstört. Wann ist er wieder da?`:`${n} bei ${mmss(t)} getötet. Wann ist er wieder da?`;ans=t+add;rule=r;alt=hard?[t+add-30,t+add+30,t+add-15,t+add+15,t+(add===300?360:300)]:[t+add-60,t+add+60,t+(add===300?360:300),t+add-30,t+add+30];}
  }
  const opts=[ans];for(const a of shuffle(alt))if(a>0&&!opts.includes(a)&&opts.length<4)opts.push(a);
- return{kind,q,ans,rule,opts:opts.sort((a,b)=>a-b)};
+ return{kind,q,ans,rule,opts:opts.sort((a,b)=>a-b),secs:tqSecs(hard)};
 }
-function newTimerRound(){tq={qs:Array.from({length:TQ_N},makeTimerQ),i:0,points:0,answer:null,deadline:0,done:false,right:0};}
+function newTimerRound(){tq={hard:HARD,qs:Array.from({length:TQ_N},()=>makeTimerQ()),i:0,points:0,answer:null,deadline:0,done:false,right:0};}
 function stopTimer(){clearInterval(tqTimer);tqTimer=null;}
 function startTimer(){
  stopTimer();if(!tq||tq.done||tq.answer!=null)return;
- if(!tq.deadline)tq.deadline=Date.now()+TQ_SECS*1000;
+ if(!tq.deadline)tq.deadline=Date.now()+tqSecs(tq.hard)*1000;
  tqTimer=setInterval(()=>{
   const left=Math.max(0,tq.deadline-Date.now()),ring=document.getElementById('tq-ring'),num=document.getElementById('tq-left');
   if(!ring){stopTimer();return;}
-  ring.style.setProperty('--p',String(left/(TQ_SECS*1000)));if(num)num.textContent=Math.ceil(left/1000);
+  ring.style.setProperty('--p',String(left/(tqSecs(tq.hard)*1000)));if(num)num.textContent=Math.ceil(left/1000);
   if(!left){stopTimer();answerTimer(-1);ctx.rerender();}
  },100);
 }
@@ -402,20 +426,20 @@ function answerTimer(val){
 }
 function nextTimer(){if(!tq)return;if(tq.i+1<TQ_N){tq.i++;tq.answer=null;tq.deadline=0;}else{tq.done=true;tqs.rounds++;const rec=tq.points>tqs.best;tqs.best=Math.max(tqs.best,tq.points);store(TQ_KEY,tqs);if(rec||tq.right>=4)fx='best';}}
 function timerHtml(){
- if(!tq)return hero({art:'Zilean',badge:'Minispiel',t1:'Timer',t2:'Quiz',rules:`Wann kommt der Drache wieder? Wann hat der Gegner wieder Flash? ${TQ_N} Fragen, je ${TQ_SECS} Sekunden. Je schneller, desto mehr Punkte.`,demo:'<div class="tq-clock big"><span>5:00</span></div>',stats:tqs.best?stat(tqs.best,'Rekord')+stat(tqs.rounds,'Runden'):'',btn:'Los geht\'s',act:'data-tq="start"',friends:'timer'});
+ if(!tq)return hero({art:'Zilean',badge:'Minispiel',t1:'Timer',t2:'Quiz',rules:`Wann kommt der Drache wieder? Wann hat der Gegner wieder Flash? ${TQ_N} Fragen, je ${tqSecs()} Sekunden. Je schneller, desto mehr Punkte.`,demo:'<div class="tq-clock big"><span>5:00</span></div>',stats:tqs.best?stat(tqs.best,'Rekord')+stat(tqs.rounds,'Runden'):'',btn:'Los geht\'s',act:'data-tq="start"',friends:'timer'});
  if(tq.done){
   return`<section class="card mq-end"><span class="mg-badge">Runde fertig</span><h2><b data-countup="0">${tq.points}</b> Punkte</h2><p class="fine">${tq.right} von ${TQ_N} richtig. Rekord: ${tqs.best} Punkte.</p><button class="mg-go small" data-tq="start"><span>Nochmal</span></button></section>`;
  }
  const q=tq.qs[tq.i],done=tq.answer!=null;
  const dots=tq.qs.map((x,k)=>`<i class="${k<tq.i?(x.ok?'best':'bad'):k===tq.i?'now':''}"></i>`).join('');
- const left=done?0:Math.max(0,tq.deadline?(tq.deadline-Date.now())/1000:TQ_SECS);
+ const left=done?0:Math.max(0,tq.deadline?(tq.deadline-Date.now())/1000:tqSecs(tq.hard));
  return`<section class="card tq-card"><div class="mq-top"><span class="mq-dots dl-dots">${dots}</span><span class="fine">Punkte: <b>${tq.points}</b></span></div>${timerView(q,tq.answer,q.gain,left,'data-tq-pick',`<button class="btn primary" data-tq="next">${tq.i+1<TQ_N?'Weiter':'Ergebnis'}</button>`,'tq')}</section>`;
 }
 function timerView(q,answer,gain,left,pickAttr,next,idp){
  const done=answer!=null,ok=answer===q.ans;
  const opts=q.opts.map((t,k)=>{const cls=!done?'':t===q.ans?'best':t===answer?'bad':'';return`<button class="tq-opt ${cls}" style="--i:${k}" ${pickAttr}="${t}" ${done?'disabled':''}>${mmss(t)}</button>`;}).join('');
  const res=done?`<div class="pz-verdict ${ok?'best':'bad'}"><strong>${ok?`+${gain}`:answer===-1?'Zeit abgelaufen':'Daneben'}</strong><p>Richtig ist ${mmss(q.ans)}. ${ctx.esc(q.rule)}</p>${next}</div>`:'';
- return`<div class="tq-main"><div class="tq-ring" id="${idp}-ring" style="--p:${left/TQ_SECS}"><span id="${idp}-left">${Math.ceil(left)}</span></div><h2 class="tq-q">${ctx.esc(q.q)}</h2></div><div class="tq-opts">${opts}</div>${res}`;
+ return`<div class="tq-main"><div class="tq-ring" id="${idp}-ring" style="--p:${Math.min(1,left/(q.secs||TQ_SECS))}"><span id="${idp}-left">${Math.ceil(left)}</span></div><h2 class="tq-q">${ctx.esc(q.q)}</h2></div><div class="tq-opts">${opts}</div>${res}`;
 }
 
 /* ---------- Mehrspieler (Lobby) ---------- */
@@ -431,14 +455,15 @@ export function mpReady(game,c){
  return null;
 }
 const qKey=(g,q)=>g==='counter'?q.role+q.enemy:g==='whowins'?q.blue.join()+q.red.join():g==='ban'?q.rank.join():g==='macro'?q.id:`${q.ans}|${q.opts.join()}`;
-export function mpGen(game,seed,n){
- return withRng(seeded(`riftroom-mp-${game}-${seed}`),()=>{
-  if(game==='macro')return shuffle((scen?.de||[]).map(x=>x.id).sort()).slice(0,n).map(id=>({id}));
+export function mpGen(game,seed,n,hard=false){
+ const prev=HARD;HARD=!!hard;
+ try{return withRng(seeded(`riftroom-mp-${game}-${seed}${hard?'-h':''}`),()=>{
+  if(game==='macro'){const all=scen?.de||[],h=all.filter(x=>x.hard),use=hard&&h.length>=n?h:all;return shuffle(use.map(x=>x.id).sort()).slice(0,n).map(id=>({id}));}
   const make={counter:()=>makePuzzle(ROLE_KEYS),whowins:makeDuel,ban:makeBan,timer:makeTimerQ}[game];
   const out=[],seen=new Set();
   for(let t=0;t<n*4&&out.length<n;t++){const q=make();if(!q)break;const k=qKey(game,q);if(seen.has(k))continue;seen.add(k);out.push(q);}
   return out;
- });
+ });}finally{HARD=prev;}
 }
 export function mpSig(game,qs){const str=qs.map(q=>qKey(game,q)).join('/');let h=7;for(let i=0;i<str.length;i++)h=Math.imul(h,31)+str.charCodeAt(i)>>>0;return h.toString(36)+'-'+qs.length;}
 export const mpMax=(game,n)=>game==='timer'?n*170:game==='whowins'?n:n*2;
@@ -463,6 +488,7 @@ export function mpCard(game,q,answer,gain,left,next){
  return timerView(q,has?answer:null,gain,left,'data-mp-pick',next,'mp');
 }
 export const MP_SECS=TQ_SECS;
+export const mpSecs=hard=>tqSecs(!!hard);
 
 /* ---------- Schnittstelle zur App ---------- */
 // Matchup-Winrates für den Draft (Lane-Duelle, Konter-Bans). Lädt die Datei beim ersten Aufruf nach.
@@ -491,6 +517,7 @@ export function afterPuzzle(tab){
 }
 export function handlePuzzleClick(el){
  const d=el.dataset;
+ if(d.pzHard){setHard(!HARD);ctx.rerender();return true;}
  if(d.pzPick){answerPuzzle(d.pzPick);ctx.rerender();return true;}
  if(d.pz==='start'){cr={i:0,grades:[],from:pz.rating,done:false};newPuzzle();ctx.rerender();window.scrollTo({top:0,behavior:'smooth'});return true;}
  if(d.pz==='next'){if(cr&&cr.i+1>=CP_N){cr.done=true;fx=cr.grades.filter(g=>g==='best').length>=7?'best':null;}else{if(cr)cr.i++;newPuzzle();}ctx.rerender();return true;}

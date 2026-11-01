@@ -121,7 +121,7 @@ function poolCounters(tk){
   // Hat ein Spieler mehrere Comfort-Picks, lohnt ein Konter-Ban weniger (er weicht einfach aus). Pro Champion höchstens zwei Konter.
   const r=ROLES[i],mine=state.allies[i]?[{id:state.allies[i],comfort:5}]:[...p.pool].filter(v=>v.comfort>=4&&!tk.has(v.id)).sort((a,b)=>b.comfort-a.comfort).slice(0,3);
   for(const v of mine){
-   const rows=(m.roles[r]?.[v.id]||[]).filter(x=>x[2]>=400).map(([o,w,n])=>({id:o,wr:(w*n+50*200)/(n+200)})).filter(x=>x.wr>=52.5).sort((a,b)=>b.wr-a.wr).slice(0,2);
+   const rows=(m.roles[r]?.[v.id]||[]).filter(x=>x[2]>=130).map(([o,w,n])=>({id:o,wr:(w*n+50*70)/(n+70)})).filter(x=>x.wr>=52.5).sort((a,b)=>b.wr-a.wr).slice(0,2);
    for(const x of rows)out.push({id:x.id,vs:v.id,wr:x.wr,role:r,weight:v.comfort/5/mine.length*(state.allies[i]?1:0.6)});
   }
  });
@@ -783,7 +783,7 @@ function practiceBlocks(type,index){
 
 /* ---------- Analyse (Claude) ---------- */
 // Lane-Duell laut Statistik als Text, z. B. „Garen gewinnt 52,1 % gegen Darius (4.123 Spiele)“.
-function laneTxt(x,e,r){const row=x&&e?getMatchups()?.roles?.[r]?.[e]?.find(z=>z[0]===x):null;if(!row||row[2]<300)return'';const a=(row[1]*row[2]+50*200)/(row[2]+200);return`${cname(x)} wins ${pct(a)} vs ${cname(e)} (${int(row[2])} games)`;}
+function laneTxt(x,e,r){const row=x&&e?getMatchups()?.roles?.[r]?.[e]?.find(z=>z[0]===x):null;if(!row||row[2]<100)return'';const a=(row[1]*row[2]+50*70)/(row[2]+70);return`${cname(x)} wins ${pct(a)} vs ${cname(e)} (${int(row[2])} games)`;}
 function buildAnalysisPrompt(){
  const name=cname;
  const wrTxt=(id,role)=>{const e=metaFor(id,role);return e?` (win rate ${(e.wins/e.games*100).toFixed(1)} % in ${e.games} games)`:'';};

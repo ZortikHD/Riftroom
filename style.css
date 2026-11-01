@@ -577,7 +577,7 @@ dialog[open]::backdrop{animation:fadeIn .2s}
 .mg-score b.bump{animation:bump .45s cubic-bezier(.3,1.6,.5,1)}
 @keyframes bump{from{transform:scale(1.7)}}
 .mg-stage{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;min-height:300px;padding:40px 14px 30px;border-radius:var(--r-xl);border:1px solid var(--line);background:var(--bg);overflow:hidden;isolation:isolate}
-.mg-ghost{position:absolute;inset:-10%;width:120%;height:120%;object-fit:cover;z-index:-1;opacity:.55;transition:filter .6s ease}
+.mg-ghost{position:absolute;inset:-10%;width:120%;height:120%;object-fit:cover;z-index:-1;opacity:0;filter:blur(32px) brightness(.35) saturate(.3);transition:filter 1.2s ease,opacity 1.2s ease}
 .mg-ghost:not([src]){display:none}
 .mg-stage::after{content:"";position:absolute;inset:0;z-index:-1;background:radial-gradient(70% 70% at 50% 50%,transparent,var(--bg))}
 .mg-word{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;min-height:72px;align-items:center;perspective:700px}
@@ -1849,3 +1849,17 @@ dialog>:last-child:not(.dlg-actions){margin-bottom:22px}
 .prof-card.prof-more{align-self:stretch}
 .lc{margin-right:62px}
 .lc-grid span{right:-62px;width:58px;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Schwerer Modus: Schalter auf den Startbildschirmen der Minispiele und in der Lobby */
+.pz-hard{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px 10px}
+.pz-hard .fine{max-width:46ch}
+.hard-btn{display:inline-flex;align-items:center;gap:8px;padding:6px 12px 6px 8px;border-radius:999px;border:1px solid var(--line-strong);background:color-mix(in srgb,var(--bg) 70%,transparent);color:var(--muted);font-weight:600;font-size:13px}
+.hb-dot{position:relative;width:28px;height:16px;border-radius:999px;background:var(--line-strong);transition:background .2s}
+.hb-dot::after{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:var(--text);transition:transform .2s}
+.hard-btn[aria-pressed="true"]{color:var(--red);border-color:color-mix(in srgb,var(--red) 50%,var(--line))}
+.hard-btn[aria-pressed="true"] .hb-dot{background:var(--red)}
+.hard-btn[aria-pressed="true"] .hb-dot::after{transform:translateX(12px)}
+.hard-btn:disabled{opacity:.6}
+.lb-countrow{flex-wrap:wrap;justify-content:center}
+/* Schwer: fünf Angebote nebeneinander, am Handy 3+2 */
+@media (min-width:701px){.pz-opts:has(>:nth-child(5)){grid-template-columns:repeat(5,minmax(0,1fr))}}
+@media (max-width:700px){.pz-opts:has(>:nth-child(5)){grid-template-columns:repeat(6,minmax(0,1fr))}.pz-opts:has(>:nth-child(5))>*{grid-column:span 2}.pz-opts:has(>:nth-child(5))>:nth-child(4){grid-column:2/span 2}}

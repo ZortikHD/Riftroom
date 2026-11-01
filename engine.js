@@ -229,7 +229,7 @@ export function recommend(state,catalog,now=Date.now(),mu=null){
   else if(live&&!pool&&(stat.pickRate??1)<1){meta=Math.min(meta,40);reasons.push('Nische');}
   // Lane-Duell gegen den schon gepickten Gegner (geglättet mit 200 virtuellen Spielen).
   let lane=null,matchup=null;const lr=laneRows?.find(x=>x[0]===c.id);
-  if(lr&&lr[2]>=300){const a=(lr[1]*lr[2]+50*200)/(lr[2]+200);matchup={foe,wr:a,n:lr[2]};lane=clamp(50+(a-50)*8,0,100);if(a>=51.5)reasons.unshift('Matchup+');else if(a<=48.5)reasons.unshift('Matchup-');}
+  if(lr&&lr[2]>=100){const a=(lr[1]*lr[2]+50*70)/(lr[2]+70);matchup={foe,wr:a,n:lr[2]};lane=clamp(50+(a-50)*8,0,100);if(a>=51.5)reasons.unshift('Matchup+');else if(a<=48.5)reasons.unshift('Matchup-');}
   const components=[{label:'Champion-Pool',value:comfort,weight:.35},{label:'Teamkomposition',value:fit,weight:.4},...(enemy.known?[{label:'Gegnerprofil',value:response,weight:.15}]:[]),...(meta!==null?[{label:'Meta-Daten',value:meta,weight:.25}]:[]),...(lane!==null?[{label:'Lane-Duell',value:lane,weight:.3}]:[])];
   const total=components.reduce((a,v)=>a+v.weight,0);let raw=components.reduce((a,v)=>a+v.value*v.weight,0)/total;
   // Off-Meta- und Nischen-Picks außerhalb des Pools nur, wenn sonst wirklich alles passt.

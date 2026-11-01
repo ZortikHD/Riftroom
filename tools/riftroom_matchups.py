@@ -1,5 +1,6 @@
 # Matchup-Winrates für das Counter-Puzzle: Für jeden häufigen Champion einer Rolle, wie oft
-# gewinnen die anderen Champions derselben Rolle gegen ihn (Emerald+, Solo/Duo, Lolalytics).
+# gewinnen die anderen Champions derselben Rolle gegen ihn (Master+, Solo/Duo, Lolalytics).
+# Master+ hat rund ein Viertel der Spiele von Emerald+, deshalb reichen schon 80 Spiele pro Duell.
 import json, sys, time, os, urllib.request
 from datetime import datetime, timezone
 # Aufruf: python3 -I riftroom_matchups.py <current.json> <ausgabe.json> <catalog.json>
@@ -18,7 +19,7 @@ for role, lane in LANE.items():
     table = {}
     for cid in enemies:
         key = next(c['key'] for c in cat['champions'] if c['id'] == cid)
-        url = f"https://a1.lolalytics.com/mega/?ep=counter&v=1&patch={cur['patch']}&c={cid.lower()}&lane={lane}&tier=emerald_plus&queue=ranked&region=all"
+        url = f"https://a1.lolalytics.com/mega/?ep=counter&v=1&patch={cur['patch']}&c={cid.lower()}&lane={lane}&tier=master_plus&queue=ranked&region=all"
         try:
             d = get(url)
         except Exception as ex:
@@ -27,7 +28,7 @@ for role, lane in LANE.items():
         for r in d.get('counters') or []:
             opp = id_by_key.get(str(r.get('cid')))
             n = int(r.get('n') or 0)
-            if not opp or opp == cid or opp not in pool or n < 250: continue
+            if not opp or opp == cid or opp not in pool or n < 80: continue
             rows.append([opp, round(100 - float(r['vsWr']), 1), n])
         if len(rows) >= 6: table[cid] = sorted(rows, key=lambda x: -x[1])
         time.sleep(0.5)
@@ -44,6 +45,6 @@ for role, table in roles.items():
             back = look.get((r[0], e))
             r[1] = round((look[(e, r[0])] + 100 - back) / 2, 1) if back is not None else round(r[1] - bias, 1)
         rows.sort(key=lambda x: -x[1])
-json.dump({'patch': cur['patch'], 'rank': 'Emerald+', 'source': 'Lolalytics', 'updatedAt': datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'), 'roles': roles},
+json.dump({'patch': cur['patch'], 'rank': 'Master+', 'source': 'Lolalytics', 'updatedAt': datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'), 'roles': roles},
           open(out, 'w'), separators=(',', ':'), ensure_ascii=False)
 print('ok', os.path.getsize(out), 'bytes')

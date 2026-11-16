@@ -21,6 +21,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Supabase wach halten
+        # Kostenlose Supabase-Projekte pausieren nach einigen Tagen ohne Anfragen. Eine kleine Datenbank-Abfrage
+        # pro Tag reicht. Adresse und öffentlicher Schlüssel stehen ohnehin in app.js (kein Geheimnis).
+        continue-on-error: true
+        run: |
+          url=$(grep -o "SB_URL='[^']*'" app.js | head -1 | cut -d"'" -f2)
+          key=$(grep -o "SB_KEY='[^']*'" app.js | head -1 | cut -d"'" -f2)
+          code=$(curl -s -o /dev/null -w '%{http_code}' -m 60 "$url/rest/v1/riot_rank_history?select=*&limit=1" -H "apikey: $key" -H "Authorization: Bearer $key")
+          echo "Supabase antwortet mit $code"
       - name: Champion-Katalog holen
         run: |
           mkdir -p "$RUNNER_TEMP/out"

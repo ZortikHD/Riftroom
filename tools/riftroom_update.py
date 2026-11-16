@@ -1,5 +1,5 @@
-# Tägliches Daten-Update: Katalog (Riot Data Dragon), Winrates (Master+) und Best in Slot (Lolalytics).
-# Master+ hat rund ein Viertel der Spiele von Emerald+; die Mindest-Spielzahlen in der App sind darauf abgestimmt.
+# Tägliches Daten-Update: Champion-Katalog von Riot (Data Dragon). Winrates, Matchups und Best in Slot
+# kommen seit November 2026 aus Turnierspielen (riftroom_pro.py und riftroom_proagg.py), nicht mehr aus der Solo Queue.
 # Aufruf: python3 -I riftroom_update.py <ausgabeordner>
 import json, sys, time, os, re, urllib.request, urllib.error
 from datetime import datetime, timezone
@@ -23,91 +23,5 @@ assert len(raw) >= 100, 'Champion-Katalog unvollstaendig'
 champions = [{'id': c['id'], 'key': c['key'], 'name': c['name'], 'title': c['title'], 'tags': c['tags'], 'info': c['info']} for c in raw.values()]
 catalog = {'version': ver, 'fetchedAt': now(), 'champions': champions}
 id_by_key = {str(c['key']): c['id'] for c in champions}
-LANES = {'top': 'TOP', 'jungle': 'JUNGLE', 'middle': 'MIDDLE', 'bottom': 'BOTTOM', 'support': 'UTILITY'}
-def lane_data(patch, lane, tier='master_plus'):
-    url = f'https://a1.lolalytics.com/mega/?ep=list&v=1&patch={patch}&tier={tier}&queue=ranked&region=all&lane={lane}'
-    try:
-        d = get(url)
-    except urllib.error.HTTPError as e:
-        if e.code == 404: raise NoData(f'{patch} {lane}: HTTP 404')
-        raise
-    if not isinstance(d, dict): raise RuntimeError(f'Format geaendert ({patch} {lane})')
-    if d.get('status') == 404 or not d.get('cid') or not d.get('response', {}).get('valid', True):
-        raise NoData(f'{patch} {lane}: noch keine Daten')
-    sample = next(iter(d['cid'].values()))
-    if not isinstance(sample, dict) or not {'games', 'wr', 'lane'} <= set(sample):
-        raise RuntimeError(f'Format geaendert ({patch} {lane}): Felder {sorted(sample)[:8] if isinstance(sample, dict) else type(sample).__name__}')
-    return d
-def build(patch):
-    entries, matches = [], 0
-    for lane, role in LANES.items():
-        d = lane_data(patch, lane)
-        matches = max(matches, int(d.get('analysed') or 0))
-        for key, v in d['cid'].items():
-            cid = id_by_key.get(str(key)); games = round(float(v.get('games') or 0)); wr = float(v.get('wr') or 0)
-            if not cid or v.get('lane') != lane or games < 150 or not (0 < wr < 100): continue
-            e = {'champion': cid, 'role': role, 'games': games, 'wins': min(games, max(0, round(games * wr / 100)))}
-            if v.get('pr') is not None and 0 <= float(v['pr']) <= 100: e['pickRate'] = float(v['pr'])
-            if v.get('br') is not None and 0 <= float(v['br']) <= 100: e['banRate'] = float(v['br'])
-            entries.append(e)
-        time.sleep(0.6)
-    if len(entries) <= 100: raise NoData(f'zu wenige Zeilen fuer {patch} ({len(entries)})')
-    matches = max([matches] + [e['games'] for e in entries])
-    return {'schemaVersion': 1, 'source': 'Lolalytics (inoffizielle Abfrage, nicht von Riot)', 'patch': patch,
-            'updatedAt': now(), 'region': 'Global', 'rank': 'Master+',
-            'queue': 'Ranked Solo/Duo', 'matches': matches, 'entries': entries}
-def try_build(patch):
-    try: return build(patch), ''
-    except NoData as e: return None, str(e)
-newest, why = try_build(patches[0])
-older, why_older = try_build(patches[1]) if len(patches) > 1 else (None, 'kein vorheriger Patch')
-note = ''
-if newest and (not older or len(newest['entries']) >= 0.6 * len(older['entries'])):
-    cur, prev = newest, older
-else:
-    if not older: raise RuntimeError(f'keine Winrates: {why or "zu wenige Zeilen"}; {why_older}')
-    note = f'Fallback: {patches[0]} hat erst ' + (f"{len(newest['entries'])} Zeilen" if newest else why)
-    cur = older
-    prev = try_build(patches[2])[0] if len(patches) > 2 else None
-# Best in Slot: Master+ auf demselben Patch wie "aktuell". Nur Picks ab 2 % Pickrate,
-# Winrate mit 2000 virtuellen Spielen Richtung 50 % geglaettet, Top 6 je Rolle.
-bis = None
-try:
-    roles = {}
-    for lane, role in LANES.items():
-        d = lane_data(cur['patch'], lane, 'master_plus'); rows = []
-        for key, v in d['cid'].items():
-            cid = id_by_key.get(str(key)); g = round(float(v.get('games') or 0)); wr = float(v.get('wr') or 0); pr = float(v.get('pr') or 0)
-            if not cid or v.get('lane') != lane or g < 1000 or pr < 2 or not (0 < wr < 100): continue
-            rows.append([cid, round(wr, 1), round(pr, 1), g, (wr / 100 * g + 0.5 * 2000) / (g + 2000)])
-        rows.sort(key=lambda x: -x[4])
-        if len(rows) < 3: raise NoData(f'Master+ {lane}: zu wenige Zeilen')
-        roles[role] = [r[:4] for r in rows[:6]]
-        time.sleep(0.6)
-    bis = {'label': 'Solo Queue Master+', 'patch': cur['patch'], 'region': 'Global', 'asOf': now(), 'roles': roles}
-except NoData as e:
-    note += f' | Best in Slot nicht aktualisiert: {e}'
-# Best in Slot „Elite“: Grandmaster und Challenger, also dort, wo Profis außerhalb der Saison spielen.
-# Kleinere Stichprobe: ab 300 Spielen, Winrate mit 500 virtuellen Spielen Richtung 50 % geglättet.
-elite = None
-try:
-    roles = {}; games_total = 0
-    for lane, role in LANES.items():
-        d = lane_data(cur['patch'], lane, 'grandmaster_plus'); rows = []
-        games_total = max(games_total, int(d.get('analysed') or 0))
-        for key, v in d['cid'].items():
-            cid = id_by_key.get(str(key)); g = round(float(v.get('games') or 0)); wr = float(v.get('wr') or 0); pr = float(v.get('pr') or 0)
-            if not cid or v.get('lane') != lane or g < 300 or pr < 2 or not (0 < wr < 100): continue
-            rows.append([cid, round(wr, 1), round(pr, 1), g, (wr / 100 * g + 0.5 * 500) / (g + 500)])
-        rows.sort(key=lambda x: -x[4])
-        if len(rows) < 3: raise NoData(f'GM+ {lane}: zu wenige Zeilen')
-        roles[role] = [r[:4] for r in rows[:6]]
-        time.sleep(0.6)
-    elite = {'label': 'Solo Queue Grandmaster+', 'patch': cur['patch'], 'region': 'Global', 'asOf': now(), 'matches': games_total, 'roles': roles}
-except NoData as e:
-    note += f' | Elite-Liste nicht aktualisiert: {e}'
 json.dump({'catalog': catalog}, open(os.path.join(out, 'catalog.json'), 'w'))
-json.dump({'snapshot': cur}, open(os.path.join(out, 'current.json'), 'w'))
-if prev: json.dump({'snapshot': prev}, open(os.path.join(out, 'previous.json'), 'w'))
-if bis or elite: json.dump({'solo': bis, 'elite': elite}, open(os.path.join(out, 'bis.json'), 'w'))
-print('ok', 'katalog', ver, 'winrates', cur['patch'], len(cur['entries']), 'zeilen', 'vergleich', prev['patch'] if prev else '-', 'bis', 'ja' if bis else 'nein', 'elite', 'ja' if elite else 'nein', note)
+print('ok', 'katalog', ver, len(champions), 'Champions')

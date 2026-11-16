@@ -2,7 +2,7 @@ import BUNDLED_CATALOG from './catalog.js';
 // Champion-Bilder liegen als kleine Einzeldateien neben der Seite (img/sq, img/ld) und laden erst, wenn sie gebraucht werden.
 const imgPath=dir=>new Proxy({},{get:(_,id)=>typeof id==='string'&&/^[A-Za-z0-9]+$/.test(id)?`img/${dir}/${id}.webp`:undefined});
 const SQUARE=imgPath('sq'),LOADING=imgPath('ld');
-import {ROLES,ROLE_NAMES,OPP_REGIONS,emptyOppPlayers,profileOf,learnRoles,useCatalog,initialState,composition,recommend,metaStatus,validateMeta,validateState,shortPatch} from './engine.js';
+import {ROLES,ROLE_NAMES,OPP_REGIONS,emptyOppPlayers,profileOf,learnRoles,useCatalog,initialState,composition,recommend,metaStatus,validateMeta,validateState,shortPatch,LIM,adj,adjMu} from './engine.js';
 import {poolCheck,banPlan,biggestChanges,draftTurn} from './insights.js';
 import {renderMini,mountMini,handleMiniClick,handleMiniInput,handleMiniSubmit} from './minigame.js';
 import {renderPuzzle,handlePuzzleClick,afterPuzzle,miniStats,setMatchups,getMatchups} from './puzzles.js';
@@ -29,7 +29,7 @@ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const paths={user:'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M4.5 20.5a7.5 7.5 0 0 1 15 0',check:'M5 12.5l4.5 4.5L19 7.5',swap:'M7 4 3 8l4 4 M3 8h14 M17 20l4-4-4-4 M21 16H7',search:'M21 21l-5-5 M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0',close:'m6 6 12 12 M6 18 18 6',plus:'M12 5v14 M5 12h14',spark:'m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z',upload:'M12 16V4 m-5 5 5-5 5 5 M4 16v5h16v-5',download:'M12 3v12 m-5-5 5 5 5-5 M4 16v5h16v-5',chevrondown:'m6 9 6 6 6-6',trash:'M3 6h18 M9 6V3h6v3 M5 6l1 15h12l1-15',map:'M9 4 3 6v14l6-2 6 2 6-2V4l-6 2z M9 4v14 M15 6v14',users:'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M22 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75',timer:'M12 8v5l3 2 M9 2h6 M20 13a8 8 0 1 1-16 0 8 8 0 0 1 16 0',copy:'M8 8h12v12H8z M16 8V4H4v12h4',play:'M7 4v16l13-8z',book:'M4 4h10a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4z M8 20a4 4 0 0 1 0-8h10',back:'M15 18l-6-6 6-6',refresh:'M20 7v5h-5 M4 17v-5h5 M6 7a7 7 0 0 1 12-2l2 3 M18 17a7 7 0 0 1-12 2l-2-3'};
 const icon=(name,cls='')=>`<svg class="icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[name]||paths.spark}"/></svg>`;
 
-let state=initialState(),catalog,page='draft',metaTab='pool',refreshMessage='',toastTimer,pickerTarget=null,pickerRole='ALL',pickerSearch='',metaRole='ALL',metaSearch='',metaSort='adjusted',confirmAction=null,prevMeta=null,backupTimer,selectedOpponent='',analysisText='',analysisBusy=false,analysisCtrl=null,templatesOpen=false,logResult=null;
+let state=initialState(),catalog,page='draft',metaTab='pool',refreshMessage='',toastTimer,pickerTarget=null,pickerRole='ALL',pickerSearch='',metaRole='ALL',metaSearch='',metaSort='adjusted',confirmAction=null,prevMeta=null,recentMeta=null,backupTimer,selectedOpponent='',analysisText='',analysisBusy=false,analysisCtrl=null,templatesOpen=false,logResult=null;
 // Animationen nur für Änderungen: Vergleich mit dem zuletzt gezeigten Draft (auch bei Picks von Teammitgliedern).
 let lastBoard=null,lastComp=null;
 function clearDraftView(){analysisText='';lastBoard=null;csKey=null;}
@@ -121,7 +121,7 @@ function poolCounters(tk){
   // Hat ein Spieler mehrere Comfort-Picks, lohnt ein Konter-Ban weniger (er weicht einfach aus). Pro Champion höchstens zwei Konter.
   const r=ROLES[i],mine=state.allies[i]?[{id:state.allies[i],comfort:5}]:[...p.pool].filter(v=>v.comfort>=4&&!tk.has(v.id)).sort((a,b)=>b.comfort-a.comfort).slice(0,3);
   for(const v of mine){
-   const rows=(m.roles[r]?.[v.id]||[]).filter(x=>x[2]>=130).map(([o,w,n])=>({id:o,wr:(w*n+50*70)/(n+70)})).filter(x=>x.wr>=52.5).sort((a,b)=>b.wr-a.wr).slice(0,2);
+   const rows=(m.roles[r]?.[v.id]||[]).filter(x=>x[2]>=LIM.muPick).map(([o,w,n])=>({id:o,wr:adjMu(w,n)})).filter(x=>x.wr>=52.5).sort((a,b)=>b.wr-a.wr).slice(0,2);
    for(const x of rows)out.push({id:x.id,vs:v.id,wr:x.wr,role:r,weight:v.comfort/5/mine.length*(state.allies[i]?1:0.6)});
   }
  });
@@ -267,8 +267,8 @@ const WHY=new Map([['Frontline','adds frontline'],['Engage','adds engage'],['Mag
 let PATCHN=null;
 function onPatchnotes(d){try{if(!d||typeof d.patch!=='string'||!Array.isArray(d.champions)||!/^https:\/\/www\.leagueoflegends\.com\//.test(d.url||''))return;PATCHN={patch:d.patch,notes:String(d.notes||''),url:d.url,set:new Set(d.champions.filter(x=>typeof x==='string'))};}catch{}}
 const isChanged=id=>!!PATCHN&&!!state.meta&&shortPatch(state.meta.patch)===PATCHN.patch&&PATCHN.set.has(id);
-// Unter etwa 1,5 Millionen Master+-Spielen ist ein Patch noch jung (ein voller Patch hat rund 4 Millionen).
-const patchYoung=()=>!!state.meta&&/master/i.test(state.meta.rank||'')&&(state.meta.matches||0)<1500000;
+// Nur bei Solo-Queue-Daten: unter etwa 1,5 Millionen Master+-Spielen ist ein Patch noch jung.
+const patchYoung=()=>!!state.meta&&!state.meta.span&&/master/i.test(state.meta.rank||'')&&(state.meta.matches||0)<1500000;
 const chgTag=id=>isChanged(id)?`<span class="chg" title="Changed in patch ${PATCHN.notes}">changed</span>`:'';
 const why=(x,r)=>{const m=/(\d)\/5$/.exec(x);if(m)return`fits the pool (${m[1]}/5)`;if(x==='Matchup+'&&r?.matchup)return`wins the lane vs ${cname(r.matchup.foe)} (${pct(r.matchup.wr)})`;if(x==='Matchup-'&&r?.matchup)return`tough vs ${cname(r.matchup.foe)} (${pct(r.matchup.wr)})`;if(x==='Off-Meta')return'barely played in this role';if(x==='Patch'&&PATCHN)return`changed in patch ${PATCHN.notes}`;if(x==='Nische')return'rarely played in this role';return WHY.get(x)||x;};
 function stepSuggestions(c,tgt){
@@ -871,7 +871,7 @@ function practiceBlocks(type,index){
 
 /* ---------- Analyse (Claude) ---------- */
 // Lane-Duell laut Statistik als Text, z. B. „Garen gewinnt 52,1 % gegen Darius (4.123 Spiele)“.
-function laneTxt(x,e,r){const row=x&&e?getMatchups()?.roles?.[r]?.[e]?.find(z=>z[0]===x):null;if(!row||row[2]<100)return'';const a=(row[1]*row[2]+50*70)/(row[2]+70);return`${cname(x)} wins ${pct(a)} vs ${cname(e)} (${int(row[2])} games)`;}
+function laneTxt(x,e,r){const row=x&&e?getMatchups()?.roles?.[r]?.[e]?.find(z=>z[0]===x):null;if(!row||row[2]<LIM.mu)return'';const a=adjMu(row[1],row[2]);return`${cname(x)} wins ${pct(a)} vs ${cname(e)} (${int(row[2])} games)`;}
 function buildAnalysisPrompt(){
  const name=cname;
  const wrTxt=(id,role)=>{const e=metaFor(id,role);return e?` (win rate ${(e.wins/e.games*100).toFixed(1)} % in ${e.games} games)`:'';};
@@ -916,23 +916,24 @@ function renderMeta(){
  const m=state.meta,s=status();
  if(!m)return head('Meta','Win rates by role, ban suggestions and trends since the last patch.')+`<section class="card empty"><h2>No win rates yet</h2><p>Win rates are loaded automatically every day. As soon as data arrives, pool check, ban suggestions and trends appear here.</p><button class="btn" data-action="import-meta">${icon('upload')}Import your own data</button></section>`;
  const byId=new Map(catalog.champions.map(c=>[c.id,c]));
- const prev=prevMeta&&shortPatch(prevMeta.patch)!==shortPatch(m.patch)?prevMeta:null;
- const sub=`Patch ${esc(shortPatch(m.patch))} · ${esc(m.rank)} · ${esc(m.region)} · ${int(m.matches)} games · as of ${date(m.updatedAt)}${patchYoung()?` · <span class="tag warn" title="Only a few games on this patch so far: win rates still move around and settle over the next days.">Fresh patch</span>`:''}`;
+ const prev=prevMeta&&(m.span?!!prevMeta.span&&prevMeta.span!==m.span:shortPatch(prevMeta.patch)!==shortPatch(m.patch))?prevMeta:null;
+ const trendCur=m.span&&recentMeta?recentMeta:m;
+ const sub=(m.span?`Tournament games ${esc(m.span)} · all leagues · ${int(m.matches)} games · as of ${date(m.updatedAt)}`:`Patch ${esc(shortPatch(m.patch))} · ${esc(m.rank)} · ${esc(m.region)} · ${int(m.matches)} games · as of ${date(m.updatedAt)}`)+`${patchYoung()?` · <span class="tag warn" title="Only a few games on this patch so far: win rates still move around and settle over the next days.">Fresh patch</span>`:''}`;
  const chgList=PATCHN&&shortPatch(m.patch)===PATCHN.patch&&PATCHN.set.size?`<section class="card chg-card"><div class="chg-head"><span class="role-label">Changed in patch ${PATCHN.notes}</span><a class="fine" href="${esc(PATCHN.url)}" target="_blank" rel="noopener">Patch notes ↗</a></div><div class="chg-row">${[...PATCHN.set].filter(id=>champ(id)).map(id=>`<span class="alt-chip">${portrait(id,'')}<span>${esc(cname(id))}</span></span>`).join('')}</div>${patchYoung()?`<p class="fine">Only a few games on this patch so far: win rates still move around and settle over the next days.</p>`:''}</section>`:'';
  let body='';
  if(metaTab==='pool'){
-  const pool=poolCheck(state,m,prev,byId);
-  body=`<div class="pool-grid meta-pool">${pool.map(p=>`<section class="card"><div class="pc-head"><span class="role-label">${ROLE_NAMES[p.role]}</span><strong>${esc(p.name)}</strong></div><ul class="pc-list">${p.items.map(x=>`<li>${portrait(x.id,'av sm')}<span class="pc-name">${esc(cname(x.id))}${chgTag(x.id)}</span>${x.flag==='nodata'?'<span class="tag warn span2">rarely played</span>':`<span class="num">${pct(x.wr)}</span>${deltaTag(x.delta)}<span class="wr-bar" aria-hidden="true"><i style="--v:${Math.max(0,Math.min(1,(x.wr-44)/12)).toFixed(3)}" class="${x.wr>=50?'up':'down'}"></i></span>`}</li>`).join('')||'<li class="fine">No pool entered.</li>'}</ul>${p.needsAlternatives&&p.alternatives.length?`<div class="pc-alt"><span class="role-label">Strong in this role</span><div class="pc-alt-row">${p.alternatives.map(a=>`<span class="alt-chip" title="${esc(cname(a.id))} ${pct(a.wr)}">${portrait(a.id,'')}<span>${esc(cname(a.id))}</span><span class="num">${pct(a.wr)}</span></span>`).join('')}</div></div>`:''}</section>`).join('')}</div><p class="fine">${prev?`On the right: change since patch ${esc(shortPatch(prev.patch))} in percentage points. Marked from −1.0.`:'Data from the previous patch is missing for the change.'}</p>`;
+  const pool=poolCheck(state,m,prev,byId,{trendCur:m.span?recentMeta:null});
+  body=`<div class="pool-grid meta-pool">${pool.map(p=>`<section class="card"><div class="pc-head"><span class="role-label">${ROLE_NAMES[p.role]}</span><strong>${esc(p.name)}</strong></div><ul class="pc-list">${p.items.map(x=>`<li>${portrait(x.id,'av sm')}<span class="pc-name">${esc(cname(x.id))}${chgTag(x.id)}</span>${x.flag==='nodata'?'<span class="tag warn span2">rarely played</span>':`<span class="num">${pct(x.wr)}</span>${deltaTag(x.delta)}<span class="wr-bar" aria-hidden="true"><i style="--v:${Math.max(0,Math.min(1,(x.wr-44)/12)).toFixed(3)}" class="${x.wr>=50?'up':'down'}"></i></span>`}</li>`).join('')||'<li class="fine">No pool entered.</li>'}</ul>${p.needsAlternatives&&p.alternatives.length?`<div class="pc-alt"><span class="role-label">Strong in this role</span><div class="pc-alt-row">${p.alternatives.map(a=>`<span class="alt-chip" title="${esc(cname(a.id))} ${pct(a.wr)}">${portrait(a.id,'')}<span>${esc(cname(a.id))}</span><span class="num">${pct(a.wr)}</span></span>`).join('')}</div></div>`:''}</section>`).join('')}</div><p class="fine">${prev?(prev.span?`On the right: change ${esc(recentMeta?.span||'')} vs ${esc(prev.span)} in percentage points. Marked from −1.0.`:`On the right: change since patch ${esc(shortPatch(prev.patch))} in percentage points. Marked from −1.0.`):'Comparison data is missing for the change.'}</p>`;
  }else if(metaTab==='bans'){
   const plan=banList(8,false);
   const row=b=>{const e=b.role?metaFor(b.id,b.role):null;return`<tr><td><div class="tc">${portrait(b.id,'av sm')}<span class="ban-cell">${esc(cname(b.id))}${chgTag(b.id)}<small class="ban-why">${esc(banNote(b))}</small></span></div></td><td>${b.role?ROLE_NAMES[b.role]:'—'}</td><td class="r">${e?pct(e.wins/e.games*100):'—'}</td><td class="r">${e?.pickRate==null?'—':pct(e.pickRate)}</td><td class="r">${e?.banRate==null?'—':pct(e.banRate)}</td></tr>`;};
   body=`<section class="card flush"><div class="table-wrap"><table><thead><tr><th>Champion</th><th>Role</th><th class="r">Win rate</th><th class="r">Pick rate</th><th class="r">Ban rate</th></tr></thead><tbody>${plan.items.map(row).join('')||'<tr><td colspan="5">Not enough data.</td></tr>'}</tbody></table></div></section>${skipHtml(plan.skipped)}<p class="fine">Sorted by how much win chance a champion costs you and how likely it is to be played. Enemy mains only count if they are strong right now or the player demonstrably plays them well (Riot data). Champions from your pool are excluded.</p>`;
  }else if(metaTab==='trends'){
-  const ch=biggestChanges(m,prev,6);
+  const ch=biggestChanges(trendCur,prev,6);
   const list=(rows,empty)=>rows.length?`<ul class="pc-list">${rows.map(r=>`<li>${portrait(r.id,'av sm')}<span class="pc-name">${esc(cname(r.id))}${chgTag(r.id)} <span class="muted">${ROLE_NAMES[r.role]}</span></span><span class="num">${pct(r.wr)}</span>${deltaTag(r.delta)}</li>`).join('')}</ul>`:`<p class="fine">${empty}</p>`;
-  body=prev?`<div class="two"><section class="card"><h3 class="card-title">Risers</h3>${list(ch.risers,'No data.')}</section><section class="card"><h3 class="card-title">Fallers</h3>${list(ch.fallers,'No fallers.')}</section></div><p class="fine">Since patch ${esc(shortPatch(prev.patch))}, only champions with at least 1,250 games in both patches.</p>`:'<section class="card empty"><p>Trends need data from the previous patch.</p></section>';
+  body=prev?`<div class="two"><section class="card"><h3 class="card-title">Risers</h3>${list(ch.risers,'No data.')}</section><section class="card"><h3 class="card-title">Fallers</h3>${list(ch.fallers,'No fallers.')}</section></div><p class="fine">${prev.span?`${esc(recentMeta?.span||'')} vs ${esc(prev.span)}, only champions with at least ${int(LIM.trend)} games in both years.`:`Since patch ${esc(shortPatch(prev.patch))}, only champions with at least ${int(LIM.trend)} games in both patches.`}</p>`:'<section class="card empty"><p>Trends need comparison data.</p></section>';
  }else{
-  body=`<section class="card flush"><div class="filters"><div class="search">${icon('search')}<input class="field" id="meta-search" placeholder="Search champion" value="${esc(metaSearch)}" aria-label="Search champion"></div><select class="field" id="meta-role" aria-label="Filter by role"><option value="ALL">All roles</option>${ROLES.map(r=>`<option value="${r}" ${metaRole===r?'selected':''}>${ROLE_NAMES[r]}</option>`).join('')}</select><select class="field" id="meta-sort" aria-label="Sort"><option value="adjusted" ${metaSort==='adjusted'?'selected':''}>Smoothed win rate</option><option value="wins" ${metaSort==='wins'?'selected':''}>Win rate</option><option value="games" ${metaSort==='games'?'selected':''}>Games</option></select></div><div id="meta-table">${metaTable()}</div></section><p class="fine">Smoothed = (wins + 100) / (games + 200). This pulls small samples towards 50%.</p>`;
+  body=`<section class="card flush"><div class="filters"><div class="search">${icon('search')}<input class="field" id="meta-search" placeholder="Search champion" value="${esc(metaSearch)}" aria-label="Search champion"></div><select class="field" id="meta-role" aria-label="Filter by role"><option value="ALL">All roles</option>${ROLES.map(r=>`<option value="${r}" ${metaRole===r?'selected':''}>${ROLE_NAMES[r]}</option>`).join('')}</select><select class="field" id="meta-sort" aria-label="Sort"><option value="adjusted" ${metaSort==='adjusted'?'selected':''}>Smoothed win rate</option><option value="wins" ${metaSort==='wins'?'selected':''}>Win rate</option><option value="games" ${metaSort==='games'?'selected':''}>Games</option></select></div><div id="meta-table">${metaTable()}</div></section><p class="fine">Smoothed = (wins + ${LIM.prior}) / (games + ${2*LIM.prior}). This pulls small samples towards 50%.</p>`;
  }
  const note=!s.ok?`<div class="banner warn">These win rates are currently not used in recommendations: ${esc(s.label)}.</div>`:s.fallback?`<div class="banner">Patch ${esc(shortPatch(currentPatch()))} is new and has too few games yet. Until there is enough data, we show and use the win rates from patch ${esc(shortPatch(m.patch))}.</div>`:'';
  return head('Meta',sub)+chgList+note+`<div class="subtabs" role="tablist">${META_TABS.map(([k,l])=>`<button role="tab" data-meta-tab="${k}" aria-selected="${metaTab===k}">${l}</button>`).join('')}</div>`+body;
@@ -940,8 +941,8 @@ function renderMeta(){
 function metaTable(){
  if(!state.meta)return'';
  const entries=state.meta.entries.filter(e=>(metaRole==='ALL'||e.role===metaRole)&&(!metaSearch.trim()||(champ(e.champion)&&champMatch(champ(e.champion),metaSearch)>0)));
- entries.sort((a,b)=>metaSort==='games'?b.games-a.games:metaSort==='wins'?b.wins/b.games-a.wins/a.games:(b.wins+100)/(b.games+200)-(a.wins+100)/(a.games+200));
- return`<div class="table-wrap"><table><thead><tr><th>Champion</th><th>Role</th><th class="r">Win rate</th><th class="r">Smoothed</th><th class="r">Games</th><th class="r">Pick rate</th><th class="r">Ban rate</th></tr></thead><tbody>${entries.map(e=>`<tr><td><div class="tc">${portrait(e.champion,'av sm')}${esc(cname(e.champion))}${chgTag(e.champion)}</div></td><td>${ROLE_NAMES[e.role]}</td><td class="r ${e.wins/e.games>=.5?'pos':''}">${pct(e.wins/e.games*100)}</td><td class="r">${pct((e.wins+100)/(e.games+200)*100)}</td><td class="r">${int(e.games)}</td><td class="r">${e.pickRate==null?'—':pct(e.pickRate)}</td><td class="r">${e.banRate==null?'—':pct(e.banRate)}</td></tr>`).join('')||'<tr><td colspan="7">No matching champions found.</td></tr>'}</tbody></table></div>`;
+ entries.sort((a,b)=>metaSort==='games'?b.games-a.games:metaSort==='wins'?b.wins/b.games-a.wins/a.games:adj(b)-adj(a));
+ return`<div class="table-wrap"><table><thead><tr><th>Champion</th><th>Role</th><th class="r">Win rate</th><th class="r">Smoothed</th><th class="r">Games</th><th class="r">Pick rate</th><th class="r">Ban rate</th></tr></thead><tbody>${entries.map(e=>`<tr><td><div class="tc">${portrait(e.champion,'av sm')}${esc(cname(e.champion))}${chgTag(e.champion)}</div></td><td>${ROLE_NAMES[e.role]}</td><td class="r ${e.wins/e.games>=.5?'pos':''}">${pct(e.wins/e.games*100)}</td><td class="r">${pct(adj(e)*100)}</td><td class="r">${int(e.games)}</td><td class="r">${e.pickRate==null?'—':pct(e.pickRate)}</td><td class="r">${e.banRate==null?'—':pct(e.banRate)}</td></tr>`).join('')||'<tr><td colspan="7">No matching champions found.</td></tr>'}</tbody></table></div>`;
 }
 
 /* ---------- Gegner ---------- */
@@ -1123,23 +1124,27 @@ function poolWarnings(){
   if(shared.length)w.push(`Twice in the team: ${shared.join(', ')}. Only one of them can play it in the draft.`);
   return w;});
 }
-// Best in Slot: optional ausklappbar. Pro = Worlds-Picks, Solo = Master+ Winrates. Stern = in beiden Listen.
-let bisOpen=false,bisTab='elite';
-try{const u=JSON.parse(localStorage.getItem('riftroom.bis')||'{}');bisOpen=!!u.open;if(u.tab==='solo'||u.tab==='pro')bisTab=u.tab;}catch{}
+// Best in Slot: optional, collapsible. With tournament data (Leaguepedia): top leagues, all tournaments, Prime League.
+// Without tournament data the old lists. Star = also near the top of the other list.
+let bisOpen=false,bisTab='top';
+try{const u=JSON.parse(localStorage.getItem('riftroom.bis')||'{}');bisOpen=!!u.open;if(typeof u.tab==='string')bisTab=u.tab;}catch{}
 const saveBis=()=>{try{localStorage.setItem('riftroom.bis',JSON.stringify({open:bisOpen,tab:bisTab}));}catch{}};
+const BIS_PRO_TABS=[['top','Top leagues'],['all','All tournaments'],['prime','Prime League']],BIS_OLD_TABS=[['elite','Grandmaster+'],['solo','Master+'],['pro','Worlds 2026']];
 function renderBis(){
- if(!BIS.elite&&bisTab==='elite')bisTab='solo';
- const src=BIS[bisTab],other=BIS[bisTab==='elite'?'solo':'elite']||BIS.pro;
- const sub=bisTab==='pro'?`${src.games} games · patch ${src.patch} · ${src.note}`:bisTab==='elite'?`Global · Patch ${src.patch} · ${int(src.matches||0)} games · smoothed win rate, picks from 2 % pick rate only`:`Global · patch ${src.patch} · smoothed win rate, only picks from 2% pick rate`;
+ const proMode=!!(BIS.top||BIS.all),tabs=(proMode?BIS_PRO_TABS:BIS_OLD_TABS).filter(([k])=>BIS[k]);
+ if(!tabs.length)return'';
+ if(!tabs.some(([k])=>k===bisTab))bisTab=tabs[0][0];
+ const src=BIS[bisTab],other=BIS[proMode?(bisTab==='top'?'all':'top'):(bisTab==='elite'?'solo':'elite')]||(proMode?null:BIS.pro);
+ const sub=proMode?`${tabs.find(([k])=>k===bisTab)[1]} ${esc((src.label.match(/\d{4}(–\d{4})?/)||[''])[0])} · ${int(src.matches||0)} games · presence = picks + bans`:bisTab==='pro'?`${src.games} games · patch ${src.patch} · ${src.note}`:bisTab==='elite'?`Global · Patch ${src.patch} · ${int(src.matches||0)} games · smoothed win rate, picks from 2 % pick rate only`:`Global · patch ${src.patch} · smoothed win rate, only picks from 2% pick rate`;
  const cols=ROLES.map((r,i)=>{
-  const both=new Set(other.roles[r].map(x=>x[0])),pool=new Set(state.players[i].pool.map(v=>v.id));
+  const both=new Set(other&&other!==src?other.roles[r].map(x=>x[0]):[]),pool=new Set(state.players[i].pool.map(v=>v.id));
   const rows=src.roles[r].filter(x=>champ(x[0])).map(x=>{const id=x[0],inPool=pool.has(id);
-   const stat=bisTab==='pro'?`${x[1]} Picks${x[2]?`<span class="bis-sec"> · ${x[2]} Bans</span>`:''}`:`${pct(x[1])} WR<span class="bis-sec"> · ${pct(x[2])} Pick</span>`;
-   return`<li>${portrait(id,'av sm')}<span class="bis-name"><b>${esc(cname(id))}${both.has(id)?'<i class="bis-star" title="Also near the top of the other list">★</i>':''}</b><small>${stat}</small></span>${inPool?`<span class="bis-in" title="Already in the pool">✓</span>`:`<button class="icon-btn bis-add" data-bis-add="${id}|${i}" aria-label="${esc(cname(id))}: add to the pool of ${esc(state.players[i].name)}" title="Add to pool">${icon('plus')}</button>`}</li>`;}).join('');
+   const stat=bisTab==='pro'?`${x[1]} Picks${x[2]?`<span class="bis-sec"> · ${x[2]} Bans</span>`:''}`:proMode?`${Math.round(x[2])}% presence<span class="bis-sec"> · ${Math.round(x[1])}% WR</span>`:`${pct(x[1])} WR<span class="bis-sec"> · ${pct(x[2])} Pick</span>`;
+   return`<li title="${proMode&&bisTab!=='pro'?`${esc(cname(id))}: ${pct(x[2])} presence, ${pct(x[1])} WR, ${int(x[3])} games`:''}">${portrait(id,'av sm')}<span class="bis-name"><b>${esc(cname(id))}${both.has(id)?'<i class="bis-star" title="Also near the top of the other list">★</i>':''}</b><small>${stat}</small></span>${inPool?`<span class="bis-in" title="Already in the pool">✓</span>`:`<button class="icon-btn bis-add" data-bis-add="${id}|${i}" aria-label="Add ${esc(cname(id))} to ${esc(state.players[i].name)}'s pool" title="Add to pool">${icon('plus')}</button>`}</li>`;}).join('');
   return`<div class="bis-col"><span class="role-label">${ROLE_NAMES[r]}</span><ol>${rows}</ol></div>`;}).join('');
- return`<details class="card bis" id="bis" ${bisOpen?'open':''}><summary><span class="bis-title"><span class="bis-badge">BiS</span><span><strong>Best in Slot</strong><span class="fine">What works in Grandmaster and Challenger right now, plus Master+ and Worlds 2026</span></span></span>${icon('chevrondown')}</summary>
- <div class="bis-body"><div class="bis-top"><div class="seg" role="group" aria-label="Data source">${BIS.elite?`<button data-bis-tab="elite" aria-pressed="${bisTab==='elite'}">Grandmaster+</button>`:''}<button data-bis-tab="solo" aria-pressed="${bisTab==='solo'}">Master+</button><button data-bis-tab="pro" aria-pressed="${bisTab==='pro'}">Worlds 2026 <span class="bis-done">finished</span></button></div><span class="fine">${sub}</span></div>
- <div class="bis-grid">${cols}</div><p class="fine bis-foot"><span class="bis-star">★</span> ranks high in both lists. Tap + to add the champion to the pool of that role’s player. As of ${new Date(src.asOf).toLocaleDateString('en-US')}, source: ${bisTab==='pro'?'gol.gg':'Lolalytics'}.${bisTab==='elite'?' Pro leagues pause until January. Until then "Grandmaster+" shows what the best players pick in solo queue.':''}</p></div></details>`;
+ return`<details class="card bis" id="bis" ${bisOpen?'open':''}><summary><span class="bis-title"><span class="bis-badge">BiS</span><span><strong>Best in Slot</strong><span class="fine">${proMode?'What gets played in tournaments: top leagues, all leagues and the Prime League':'What works in Grandmaster and Challenger right now, plus Master+ and Worlds 2026'}</span></span></span>${icon('chevrondown')}</summary>
+ <div class="bis-body"><div class="bis-top"><div class="seg" role="group" aria-label="Data source">${tabs.map(([k,l])=>`<button data-bis-tab="${k}" aria-pressed="${bisTab===k}">${l}${k==='pro'?' <span class="bis-done">finished</span>':''}</button>`).join('')}</div><span class="fine">${sub}</span></div>
+ <div class="bis-grid">${cols}</div><p class="fine bis-foot">${other?'<span class="bis-star">★</span> also near the top of the other list. ':''}+ adds the champion to the pool of the player in that role. As of ${new Date(src.asOf).toLocaleDateString('en-GB')}, source: ${proMode?'Leaguepedia':bisTab==='pro'?'gol.gg':'Lolalytics'}.${proMode?' Presence means: picked or banned in this share of games.':''}</p></div></details>`;
 }
 function renderTeam(){
  const warns=poolWarnings(),st=status(),tips=state.players.map((_,i)=>learnTip(state,i,st.ok?state.meta:null));
@@ -1152,7 +1157,7 @@ function renderTeam(){
 /* ---------- Spiele (eigene Historie) ---------- */
 function renderGames(){
  const h=[...state.history].reverse();
- const sub='Your own results. More meaningful than solo queue win rates once a few games add up.';
+ const sub='Your own results. More meaningful than general win rates once a few games add up.';
  if(!h.length)return head('Results',sub)+`<section class="card empty games-empty"><div class="ge-text"><h2>No games yet</h2><p>After a game, tap “Log game” in the draft and choose win or loss. Your own stats build up here: per player and champion, and against which opponents.</p><button class="btn primary" data-page="draft">To the draft</button></div><div class="games-ghost" aria-hidden="true"><span class="tag">Preview</span><div class="big-rec num">7–3</div><ul class="pc-list">${state.players.map((pl,i)=>pl.pool[0]?.id).filter(Boolean).slice(0,4).map((id,k)=>`<li>${portrait(id,'av sm')}<span class="pc-name">${esc(cname(id))}</span><span class="num">${[4,3,2,1][k]}–${[1,2,1,1][k]}</span><span class="num r"></span><span class="g-bar"><i style="width:${[80,60,67,50][k]}%"></i></span></li>`).join('')}</ul></div></section>`;
  const w=h.filter(g=>g.result==='win').length,l=h.length-w;
  const rate=(w,l)=>w+l?pct(w/(w+l)*100):'—';
@@ -1193,13 +1198,13 @@ function saveGame(){
 /* ---------- Daten ---------- */
 function renderSettings(){
  const m=state.meta,s=status();
- const steps=[['Champion pool','Weight 35. Your comfort (1–5) sets the value. Champions outside the pool start lower.'],['Team composition','Weight 40. Missing frontline, missing engage, damage balance and protection for carries.'],['Opponent profile','Weight 15 once opponent picks are known. Peel against engage, scaling against frontline. No measured lane counters.'],['Win rates','Weight 25, only with matching current data. The win rate is smoothed towards 50% with 200 virtual games.']];
+ const steps=[['Champion pool','Weight 35. Your comfort (1–5) sets the value. Champions outside the pool start lower.'],['Team composition','Weight 40. Missing frontline, missing engage, damage balance and protection for carries.'],['Opponent profile','Weight 15 once opponent picks are known. Peel against engage, scaling against frontline. No measured lane counters.'],['Win rates',`Weight 25, only with matching current data${state.meta?.span?` (tournament games ${state.meta.span})`:''}. The win rate is smoothed towards 50% with ${2*LIM.prior} virtual games.`]];
  const sample=JSON.stringify({schemaVersion:1,source:'Name of your data source',patch:shortPatch(currentPatch()),updatedAt:'ISO 8601 timestamp',region:'EUW',rank:'Emerald+',queue:'Ranked Solo',matches:123456,entries:[{champion:'Ahri',role:'MIDDLE',games:4000,wins:2050,pickRate:8.1,banRate:3.2}]},null,2);
  return head('Data','Where the numbers come from and how the recommendation is calculated.')+`<div class="settings-grid">
  <section class="card"><h2 class="card-title">Data status</h2><dl class="kv">
   <div><dt>Champion catalog</dt><dd>Riot Data Dragon ${esc(catalog.version)} · ${catalog.champions.length} champions</dd></div>
-  <div><dt>Win rates</dt><dd>${m?`${esc(m.source)} · Patch ${esc(shortPatch(m.patch))} · ${date(m.updatedAt)}`:'No data yet'} <span class="tag ${s.ok?'good':'warn'}">${m?esc(s.label):'missing'}</span></dd></div>
-  <div><dt>Comparison patch</dt><dd>${prevMeta?'Patch '+esc(shortPatch(prevMeta.patch)):'not available'}</dd></div>
+  <div><dt>Win rates</dt><dd>${m?`${esc(m.source)} · ${m.span?`${esc(m.span)} · ${int(m.matches)} games`:`Patch ${esc(shortPatch(m.patch))}`} · ${date(m.updatedAt)}`:'No data yet'} <span class="tag ${s.ok?'good':'warn'}">${m?esc(s.label):'missing'}</span></dd></div>
+  <div><dt>Comparison</dt><dd>${prevMeta?(prevMeta.span?`Year ${esc(prevMeta.span)}`:'Patch '+esc(shortPatch(prevMeta.patch))):'not available'}</dd></div>
  </dl><p class="fine" style="margin-top:14px">Win rates are updated automatically every day.</p></section>
  <section class="card"><h2 class="card-title">Target patch</h2><form id="settings-form"><div class="row"><input class="field grow" id="target-patch" value="${esc(state.targetPatch)}" placeholder="Automatic: ${esc(shortPatch(catalog.version))}" maxlength="12" aria-label="Target patch"><button class="btn" type="submit">Save</button></div><p class="fine" style="margin-top:8px">Only needed if your tournament is played on a different patch. Win rates are only used if the patch matches and they are at most 14 days old.</p><div id="settings-error" class="err" role="alert"></div></form></section>
  <section class="card"><h2 class="card-title">Backup</h2><p class="fine">${STANDALONE?'Team, pools, drafts and opponents stay in this browser. With “Show backup” you can copy them and pass them on to your team.':'When signed in to Claude, team, pools, drafts and opponents are automatically shared with everyone who opens this page. Without signing in they stay in this browser.'}</p><div class="row wrap" style="margin-top:14px"><button class="btn" data-action="export">${icon('download')}Show backup</button><button class="btn" data-action="import-team">${icon('upload')}Import backup</button></div></section>${STANDALONE?'<section class="card"><h2 class="card-title">Install as an app</h2><p class="fine">On PC and Android an “App” button appears at the top as soon as the browser offers installation. On iPhone, tap “Share” in Safari and then “Add to Home Screen”. Updates arrive automatically after that.</p></section>':''}
@@ -1225,7 +1230,7 @@ function pickerSections(type,index,blocked){
  const free=ids=>[...new Set(ids)].filter(id=>champ(id)&&!blocked.has(id));
  const byId=new Map(catalog.champions.map(c=>[c.id,c]));
  const st=status(),meta=st.ok?state.meta:null;
- const strong=role=>meta?meta.entries.filter(e=>e.role===role&&e.games>=2500).sort((a,b)=>(b.wins+100)/(b.games+200)-(a.wins+100)/(a.games+200)).map(e=>e.champion):[];
+ const strong=role=>meta?meta.entries.filter(e=>e.role===role&&e.games>=LIM.strong).sort((a,b)=>adj(b)-adj(a)).map(e=>e.champion):[];
  const opp=activeOpp();
  if(type==='allies'){
   const p=state.players[index];
@@ -1304,10 +1309,12 @@ function onCatalog(c){if(c?.champions?.length>=100&&c.version!==catalog.version)
 // Selbst importierte Winrates haben Vorrang, bis sie entfernt werden.
 function onCurrent(d){if(!d||state.metaImported)return;try{state.meta=validateMeta(d.snapshot,champIds());state.meta.source=state.meta.source.replace('inoffizielle Abfrage, nicht von Riot','unofficial query, not from Riot');state.lastChecked=d.snapshot.updatedAt;render();}catch{}}
 function onPrevious(d){if(!d)return;try{prevMeta=validateMeta(d.snapshot,champIds());render();}catch{}}
-// Best in Slot (Master+): täglich aktualisiert. Nur übernehmen, wenn das Format stimmt.
-function onBis(b,key='solo'){try{if(!b||!b.roles||!ROLES.every(r=>Array.isArray(b.roles[r])&&b.roles[r].length>=3&&b.roles[r].every(x=>Array.isArray(x)&&typeof x[0]==='string'&&isFinite(x[1])&&isFinite(x[2]))))return;BIS[key]={label:String(b.label||'Solo Queue Master+'),patch:String(b.patch||''),region:String(b.region||'Global'),asOf:String(b.asOf||''),matches:Number(b.matches)||0,roles:Object.fromEntries(ROLES.map(r=>[r,b.roles[r].slice(0,6).map(x=>[x[0],Number(x[1]),Number(x[2]),Number(x[3])||0])]))};if(page==='team')render();}catch{}}
+// Turnierdaten: laufendes Jahr allein, für Trends gegen das Vorjahr.
+function onRecent(d){if(!d)return;try{recentMeta=validateMeta(d.snapshot,champIds());render();}catch{}}
+// Best in Slot: täglich aktualisiert. Nur übernehmen, wenn das Format stimmt.
+function onBis(b,key='solo'){try{if(!b||!b.roles||!ROLES.every(r=>Array.isArray(b.roles[r])&&b.roles[r].length>=3&&b.roles[r].every(x=>Array.isArray(x)&&typeof x[0]==='string'&&isFinite(x[1])&&isFinite(x[2]))))return;BIS[key]={label:String(b.label||''),patch:String(b.patch||''),region:String(b.region||'Global'),asOf:String(b.asOf||''),matches:Number(b.matches)||0,roles:Object.fromEntries(ROLES.map(r=>[r,b.roles[r].slice(0,6).map(x=>[x[0],Number(x[1]),Number(x[2]),Number(x[3])||0])]))};if(page==='team')render();}catch{}}
 async function loadStatic(){
- try{const r=await fetch('data/meta.json',{cache:'no-cache'});if(!r.ok)throw Error();const d=await r.json();onCatalog(d.catalog);onPatchnotes(d.patchnotes);onCurrent(d.current);onPrevious(d.previous);onBis(d.bis);onBis(d.bisElite,'elite');}
+ try{const r=await fetch('data/meta.json',{cache:'no-cache'});if(!r.ok)throw Error();const d=await r.json();onCatalog(d.catalog);onPatchnotes(d.patchnotes);onPrevious(d.previous);onRecent(d.recent);onCurrent(d.current);onBis(d.bis);onBis(d.bisElite,'elite');if(d.bisPro)for(const k of ['top','all','prime'])onBis(d.bisPro[k],k);}
  catch{refreshMessage='The win rates couldn\'t be loaded right now. Check your internet connection and reload the page.';render();}
 }
 async function connect(){

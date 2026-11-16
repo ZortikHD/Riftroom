@@ -1,7 +1,7 @@
 # Welche Champions wurden im Patch geändert? Liest die offiziellen Patch Notes von Riot (leagueoflegends.com)
 # und nimmt nur die Champion-Namen aus dem Abschnitt „Champions“. Data Dragon allein reicht dafür nicht:
 # dort fehlen viele Änderungen an Fähigkeiten (16.22: 5 von 14 Champions erkannt).
-# Aufruf: python3 -I riftroom_patchnotes.py <ausgabeordner>   (liest current.json, schreibt patchnotes.json)
+# Aufruf: python3 -I riftroom_patchnotes.py <ausgabeordner>   (liest catalog.json, schreibt patchnotes.json)
 import json, os, re, sys, html, urllib.request, urllib.error
 from datetime import datetime, timezone
 out = sys.argv[1]
@@ -9,8 +9,8 @@ UA = {'User-Agent': 'Mozilla/5.0 (compatible; Riftroom/1.3; +https://github.com/
 def fetch(url, as_json=False):
     data = urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=30).read().decode('utf-8', 'ignore')
     return json.loads(data) if as_json else data
-cur = json.load(open(os.path.join(out, 'current.json')))['snapshot']['patch']          # z. B. "16.22"
 ver = json.load(open(os.path.join(out, 'catalog.json')))['catalog']['version']         # z. B. "16.22.1"
+cur = '.'.join(ver.split('.')[:2])                                                    # z. B. "16.22"
 major, minor = cur.split('.')
 notes = f'{int(major) + 10}.{int(minor)}'                                              # Spielversion 16.x = Patch Notes 26.x
 url = f'https://www.leagueoflegends.com/en-us/news/game-updates/league-of-legends-patch-{notes.replace(".", "-")}-notes/'

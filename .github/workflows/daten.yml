@@ -21,7 +21,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Winrates, Best in Slot und Katalog holen
+      - name: Champion-Katalog holen
         run: |
           mkdir -p "$RUNNER_TEMP/out"
           python3 -I tools/riftroom_update.py "$RUNNER_TEMP/out" | tee "$RUNNER_TEMP/update.log"
@@ -36,29 +36,7 @@ jobs:
           LEAGUEPEDIA_PASS: ${{ secrets.LEAGUEPEDIA_PASS }}
         run: python3 -I tools/riftroom_pro.py . --max-anfragen 600
       - name: Turnierspiele auswerten
-        continue-on-error: true
         run: if [ -s data/pro/games.jsonl ]; then python3 -I tools/riftroom_proagg.py . "$RUNNER_TEMP/out"; else echo "Noch keine Turnierspiele."; fi
-      - name: Lane-Matchups aus der Solo Queue (nur solange es keine Turnierspiele gibt)
-        continue-on-error: true
-        run: |
-          if [ -s data/pro/games.jsonl ]; then echo "Matchups kommen aus Turnierspielen."; exit 0; fi
-          if python3 -I - "$RUNNER_TEMP/out/current.json" data/matchups.json <<'EOF'
-          import json, sys
-          from datetime import datetime, timezone, timedelta
-          cur = json.load(open(sys.argv[1]))['snapshot']['patch']
-          try:
-              m = json.load(open(sys.argv[2]))
-              old = datetime.fromisoformat(m['updatedAt'].replace('Z', '+00:00')) < datetime.now(timezone.utc) - timedelta(days=7)
-              sys.exit(0 if (m.get('patch') != cur or old) else 1)
-          except Exception:
-              sys.exit(0)
-          EOF
-          then
-            python3 -I tools/riftroom_matchups.py "$RUNNER_TEMP/out/current.json" "$RUNNER_TEMP/out/matchups.json" "$RUNNER_TEMP/out/catalog.json"
-            cp "$RUNNER_TEMP/out/matchups.json" data/matchups.json
-          else
-            echo "Matchups sind aktuell."
-          fi
       - name: data/meta.json schreiben
         run: python3 -I tools/riftroom_pages.py "$RUNNER_TEMP/out" .
       - name: Speichern und Seite neu bauen

@@ -60,7 +60,10 @@ if os.path.exists(cache):
     for line in open(cache, encoding='utf-8'):
         if line.strip():
             g = json.loads(line); games[g['id']] = g
-start = max([since] + [g['dt'] for g in games.values()]) if games else since
+# Leaguepedia trägt Spiele manchmal Tage später nach: immer die letzten 21 Tage erneut abfragen (Doppelte fallen weg).
+from datetime import timedelta
+last = max(g['dt'] for g in games.values()) if games else ''
+start = max(since, (datetime.fromisoformat(last[:10]) - timedelta(days=21)).strftime('%Y-%m-%d')) if last else since
 print('vorhanden', len(games), 'Spiele, hole ab', start, flush=True)
 
 FIELDS = ','.join(['SG.GameId=GameId', 'SG.DateTime_UTC=Dt', 'SG.Patch=Patch', 'SG.Winner=Winner', 'SG.Team1=T1', 'SG.Team2=T2',

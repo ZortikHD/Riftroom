@@ -20,9 +20,8 @@ if pro:
         json.dump(mu, open(os.path.join(repo, 'data', 'matchups.json'), 'w'), separators=(',', ':'), ensure_ascii=False)
 elif (old.get('current') or {}).get('snapshot', {}).get('span'):
     meta.update({k: old.get(k) for k in ('current', 'previous', 'recent', 'bisPro')})
-else:   # Übergang: noch keine Turnierdaten, alte Zahlen behalten
-    meta.update({'current': load('current.json') or old.get('current'), 'previous': load('previous.json') or old.get('previous'),
-                 'bis': (load('bis.json') or {}).get('solo') or old.get('bis'), 'bisElite': (load('bis.json') or {}).get('elite') or old.get('bisElite')})
+else:   # noch keine Turnierdaten: alte Zahlen behalten
+    meta.update({k: old.get(k) for k in ('current', 'previous', 'bis', 'bisElite')})
 assert meta['catalog'] and meta['current']['snapshot']['entries'], 'keine Daten'
 json.dump(meta, open(target, 'w'), separators=(',', ':'), ensure_ascii=False)
 print('ok', meta['current']['snapshot'].get('span') or meta['current']['snapshot']['patch'])

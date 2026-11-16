@@ -986,7 +986,7 @@ html.calm-splash #splash.out{transform:none;filter:none}
 .bis-add:hover{color:var(--accent);border-color:var(--accent)}
 .bis-in{flex:none;width:28px;text-align:center;color:var(--accent);font-weight:700}
 .bis-foot{margin:0}
-@media (max-width:1100px){.bis-grid{grid-template-columns:repeat(auto-fill,minmax(min(100%,200px),1fr))}}
+@media (max-width:1100px){.bis-grid{grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr))}}
 @media (max-width:560px){.bis>summary{padding:12px 14px}.bis-body{padding:12px 14px 14px}.bis-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.bis-col li{padding:5px}.bis-col li::before{display:none}.bis-col .av.sm{width:26px;height:26px}}
 @media (max-width:360px){.bis-grid{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:560px){.bis-sec{display:none}}

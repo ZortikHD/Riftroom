@@ -48,7 +48,10 @@ def cargo(params):
         except Exception as e:
             d = {'error': {'code': type(e).__name__}}
         if 'error' in d:
-            print(f'  Leaguepedia: {d["error"].get("code")}, warte {wait} s', flush=True)
+            code = str(d['error'].get('code'))
+            if code != 'ratelimited' and not code.startswith('HTTP 5') and code not in ('URLError', 'TimeoutError', 'RemoteDisconnected'):
+                raise ValueError(f'Leaguepedia lehnt die Abfrage ab: {code} {str(d["error"].get("info"))[:200]}')
+            print(f'  Leaguepedia: {code}, warte {wait} s', flush=True)
             time.sleep(wait); wait = min(wait * 2, 180); continue
         time.sleep(2)   # freundlich bleiben: höchstens eine Anfrage alle zwei Sekunden
         return [r['title'] for r in d.get('cargoquery', [])]
@@ -93,6 +96,44 @@ try:
         else: cur = last
 except StopIteration:
     print('Anfrage-Limit erreicht, der Rest folgt beim nächsten Lauf.')
+
+# Pick-Reihenfolge (für den First Pick): aus PicksAndBansS7. Gespeichert als Rollen-Indizes in Pick-Reihenfolge,
+# z. B. 'bo': [1, 3, 2, 0, 4] = Blau pickt zuerst Jungle, dann Bot, ... Nur übernommen, wenn die Champions passen.
+ROLE_IX = {'top': 0, 'jungle': 1, 'mid': 2, 'middle': 2, 'bot': 3, 'bottom': 3, 'adc': 3, 'ad carry': 3, 'support': 4}
+need = [g for g in games.values() if 'bo' not in g and g['dt']]
+if need:
+    pf = ['PB.GameId=GameId', 'SG.DateTime_UTC=Dt'] + [f'PB.Team{t}{k}{i}=T{t}{k[0]}{i}' for t in (1, 2) for k in ('Pick', 'Role') for i in range(1, 6)]
+    cur = max(min(g['dt'] for g in need)[:10], (datetime.fromisoformat(max(g['dt'] for g in games.values())[:10]) - timedelta(days=21)).strftime('%Y-%m-%d') if len(need) < 2000 else '0000')
+    got = bad = 0
+    try:
+        while True:
+            rows = cargo({'tables': 'PicksAndBansS7=PB,ScoreboardGames=SG', 'join_on': 'PB.GameId=SG.GameId', 'fields': ','.join(pf),
+                          'where': f"SG.DateTime_UTC >= '{cur}'", 'order_by': 'SG.DateTime_UTC ASC'})
+            for r in rows:
+                g = games.get(r.get('GameId'))
+                if not g or 'bo' in g: continue
+                order = {}
+                for t in (1, 2):
+                    picks = [(r.get(f'T{t}P{i}') or '').strip() for i in range(1, 6)]
+                    roles = [ROLE_IX.get((r.get(f'T{t}R{i}') or '').strip().lower()) for i in range(1, 6)]
+                    if None in roles or len(set(roles)) != 5: break
+                    side = 'b' if [g['b'][x] for x in roles] == picks else 'r' if [g['r'][x] for x in roles] == picks else None
+                    if not side: break
+                    order[side] = roles
+                if len(order) == 2: g['bo'], g['ro'] = order['b'], order['r']; got += 1
+                else: g['bo'] = g['ro'] = None; bad += 1
+            last = rows[-1].get('Dt') if rows else None
+            if len(rows) < 500 or not last or last == cur: break
+            cur = last
+        # Ältere Spiele ohne passende Pick-Daten nicht jeden Tag neu anfragen
+        old = (datetime.now(timezone.utc) - timedelta(days=21)).strftime('%Y-%m-%d')
+        for g in need:
+            if 'bo' not in g and g['dt'][:10] < old: g['bo'] = g['ro'] = None
+    except StopIteration:
+        print('Anfrage-Limit erreicht, Pick-Reihenfolge folgt beim nächsten Lauf.')
+    except (ValueError, RuntimeError) as e:
+        print('Pick-Reihenfolge übersprungen:', e)
+    print('Pick-Reihenfolge:', got, 'Spiele ergänzt,', bad, 'ohne passende Daten,', sum(bool(g.get('bo')) for g in games.values()), 'insgesamt')
 
 with open(cache + '.tmp', 'w', encoding='utf-8') as f:
     for g in sorted(games.values(), key=lambda g: (g['dt'], g['id'])):

@@ -1034,6 +1034,10 @@ html.calm-splash #splash.out{transform:none;filter:none}
 .cs-swap:hover{color:var(--text);border-color:var(--accent)}
 .cs-swap .icon{width:15px;height:15px}
 .cs-team.theirs .cs-swap{margin-left:0;margin-right:auto}
+.seg.wide.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.seg.wide.four{grid-template-columns:repeat(4,minmax(0,1fr))}
+.seg.wide.three button,.seg.wide.four button{padding:0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:380px){.seg.wide.three button{font-size:14px}}
 .seg.wide.five{display:grid;grid-template-columns:repeat(5,minmax(0,1fr))}
 .seg.wide.five button{height:auto;min-height:44px;padding:4px 2px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;font-size:13px}
 .seg.wide.five button small{font-size:10px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
@@ -1117,6 +1121,14 @@ html.calm-splash #splash.out{transform:none;filter:none}
 .fl-row img{width:24px;height:24px;border-radius:var(--r-sm);filter:grayscale(1) brightness(.75);border:1px solid var(--line)}
 .champ-btn.fl{position:relative}
 .champ-btn.fl::after{content:"F";position:absolute;top:4px;right:4px;width:16px;height:16px;border-radius:var(--r-sm);background:#f2b45a;color:#111410;font:700 11px/16px var(--f-display);text-align:center}
+.fl-tag.series{background:#7fb2e5}
+.roster{margin:12px 0 4px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--raised);padding:0 12px}
+.roster summary{cursor:pointer;display:flex;align-items:center;gap:8px;padding:10px 0;font-weight:600;list-style:none}
+.roster summary::-webkit-details-marker{display:none}
+.roster summary::after{content:'+';margin-left:auto;color:var(--muted);font-weight:400}
+.roster[open] summary::after{content:'−'}
+.roster textarea{display:block;width:100%;margin:8px 0;min-height:88px;resize:vertical;font:inherit;line-height:1.4}
+.roster .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding-bottom:12px}
 .fl-next{display:flex;flex-direction:column;align-items:center;gap:6px;margin-top:6px}
 .fl-next .row{gap:8px}
 

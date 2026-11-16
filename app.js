@@ -34,7 +34,7 @@ let state=initialState(),catalog,page='draft',metaTab='pool',refreshMessage='',t
 let lastBoard=null,lastComp=null;
 function clearDraftView(){analysisText='';lastBoard=null;csKey=null;}
 // Übungs-Draft: läuft nur in diesem Browser. Der echte Draft wird vorher gesichert und danach zurückgeholt.
-let practice=null,pendingRemote=null,prSide='blue',prTimer=true,prFearless=false;
+let practice=null,pendingRemote=null,prSide='blue',prTimer=true,prFearless=false,prSeries='single',prBo=2;
 // KI-Spielplan je Draft (nur im Speicher dieser Sitzung).
 const planNotes=new Map();
 const isNew=(type,i)=>!!(lastBoard&&state[type][i]&&lastBoard[type][i]!==state[type][i]);
@@ -143,7 +143,7 @@ const banNote=b=>{const own=b.notes.some(x=>x.kind==='main'||x.kind==='fav');ret
 const skipWhy=x=>x.n>=5?`${x.n} Spiele, nur ${Math.round(x.pw)} % Siege`:x.offmeta?(x.role?`auf ${ROLE_NAMES[x.role]} kaum gespielt`:'kaum gespielt'):`gerade schwach, ${pct(x.wr)}`;
 const skipHtml=sk=>sk.length?`<p class="fine ban-skip">Kein Ban nötig: ${sk.slice(0,3).map(x=>`<b>${esc(cname(x.id))}</b> (${skipWhy(x)})`).join(', ')}.</p>`:'';
 const selOpp=()=>state.opponents.find(o=>o.id===selectedOpponent)||state.opponents[0]||null;
-const taken=()=>new Set([...state.allies,...state.enemies,...state.bans,...(state.fearless?.used||[])].filter(Boolean));
+const taken=()=>new Set([...state.allies,...state.enemies,...state.bans,...(state.fearless?.fl!==false?state.fearless?.used||[]:[])].filter(Boolean));
 
 let lastPageRendered=null,bannerClosed=false,lastInk=null;
 // Grüne Linie unter dem aktiven Tab: gleitet beim Seitenwechsel vom alten zum neuen Tab.
@@ -213,7 +213,7 @@ function renderDraft(){
  if(key!==csKey){csKey=key;hoverId=null;pickRole=null;csSearch='';csRole=tgt&&tgt.type!=='bans'?ROLES[tgt.index]:'ALL';}
  const opp=activeOpp(),aiTurn=practice&&c&&c.who==='them';
  // Kopf
- const sub=`${state.side==='red'?'Rote':'Blaue'} Seite · gegen ${esc(opp?.name||(practice?'den Computer':'Gegner'))}${practice?' · Übung':''}${state.fearless?` · Fearless Spiel ${state.fearless.game}`:''}`;
+ const sub=`${state.side==='red'?'Rote':'Blaue'} Seite · gegen ${esc(opp?.name||(practice?'den Computer':'Gegner'))}${practice?' · Übung':''}${state.fearless?` · ${seriesLabel(state.fearless)}`:''}`;
  const actions=(t.finished?`<button class="btn small" data-action="copy-discord">${icon('copy')}Für Discord</button>${practice?'':'<button class="btn small primary" data-action="log-game">Spiel eintragen</button>'}`:'')
   +(!practice&&undoStack.length&&!t.finished?`<button class="btn small" data-action="undo">${icon('back')}Rückgängig</button>`:'')
   +`<button class="btn ghost small" data-action="draft-end">${t.finished?'Neuer Draft':practice?'Übung beenden':'Abbrechen'}</button>`;
@@ -323,7 +323,7 @@ function csGrid(){
  const pools=csPoolOnly?new Set(state.players.flatMap(p=>p.pool.map(v=>v.id))):null;
  const base=[...catalog.champions].filter(c=>!pools||pools.has(c.id));
  const list=q?searchChamps(base,q):base.filter(c=>csRole==='ALL'||profileOf(c.id)?.roles.includes(csRole)).sort((a,b)=>a.name.localeCompare(b.name,'de'));
- const fl=new Set(state.fearless?.used||[]);
+ const fl=new Set(state.fearless?.fl!==false?state.fearless?.used||[]:[]);
  return list.map(c=>`<button class="champ-btn ${hoverId===c.id?'on':''} ${fl.has(c.id)?'fl':''} ${isChanged(c.id)?'chg-dot':''}" data-hover="${c.id}" ${tk.has(c.id)?'disabled':''} aria-label="${esc(c.name)}${tk.has(c.id)?' (vergeben)':''}">${portrait(c.id,'')}<span>${esc(c.name)}</span></button>`).join('')||'<div class="no-results">Kein Champion gefunden.</div>';
 }
 function lockBar(){
@@ -488,8 +488,8 @@ function helpTour(){
  startTour('welcome');
 }
 let prMode='real';
-try{const d=JSON.parse(localStorage.getItem('riftroom.draftopts')||'{}');if(d.side==='red')prSide='red';if(d.mode==='ai')prMode='ai';if(d.timer===false)prTimer=false;if(d.fearless===true)prFearless=true;}catch{}
-const saveDraftOpts=()=>{try{localStorage.setItem('riftroom.draftopts',JSON.stringify({side:prSide,mode:prMode,timer:prTimer,fearless:prFearless}));}catch{}};
+try{const d=JSON.parse(localStorage.getItem('riftroom.draftopts')||'{}');if(d.side==='red')prSide='red';if(d.mode==='ai')prMode='ai';if(d.timer===false)prTimer=false;if(d.fearless===true)prSeries='fearless';if(['single','series','fearless'].includes(d.series))prSeries=d.series;if([0,2,3,5].includes(d.bo))prBo=d.bo;}catch{}
+const saveDraftOpts=()=>{try{localStorage.setItem('riftroom.draftopts',JSON.stringify({side:prSide,mode:prMode,timer:prTimer,series:prSeries,bo:prBo}));}catch{}};
 // Rolle eines Picks ändern (tauscht mit dem anderen Slot) oder den Pick korrigieren.
 function openSwapDialog(type,i){
  const id=state[type][i];if(!id)return;confirmAction=null;
@@ -501,13 +501,87 @@ function openSwapDialog(type,i){
 }
 // Gegner scouten direkt im Draft: Riot-IDs eintragen und laden. Die meistgespielten Champions fließen sofort in die Ban-Vorschläge.
 const scoutBtn=()=>{const o=activeOpp(),n=o?o.players.filter(p=>validRiotId(p.riotId)).length:0;const full=n?`Riot-IDs (${n}/5)`:'Riot-IDs eintragen';return`<button class="btn small cs-scout" data-action="scout-open" title="${full}" aria-label="${full}">${icon('users')}${n?`<span>${n}/5</span>`:''}</button>`;};
+const scoutHtml=o=>`<div class="dlg-head"><div><h2 id="confirm-title">Gegner scouten</h2><p class="fine" style="margin-top:4px">Riot-IDs eintragen, Riftroom lädt die letzten Spiele. Was sie wirklich spielen, fließt sofort in die Ban-Vorschläge ein.</p></div><button class="icon-btn" data-action="cancel-confirm" aria-label="Schließen">${icon('close')}</button></div>
+ <div class="scout-top"><input class="field grow" id="opp-name" maxlength="40" value="${esc(o.name)}" aria-label="Teamname"><select class="field" id="opp-region" aria-label="Region">${OPP_REGIONS.map(r=>`<option value="${r}" ${o.region===r?'selected':''}>${r.toUpperCase()}</option>`).join('')}</select><button class="btn small" data-riot-all="opp">${icon('refresh')}Alle laden</button></div>
+ ${rosterHtml()}
+ <div class="scout-list">${o.players.map((p,i)=>`<div class="opp-player"><span class="role-label">${ROLE_NAMES[ROLES[i]]}</span><input class="field" data-opp-riot="${i}" value="${esc(p.riotId)}" placeholder="Name#EUW" maxlength="40" aria-label="Riot-ID ${ROLE_NAMES[ROLES[i]]}" autocomplete="off" spellcheck="false"><button class="icon-btn" data-riot-load="opp|${i}" aria-label="Laden" title="Laden">${icon('refresh')}</button>${riotBox('opp',i)}</div>`).join('')}</div>
+ <div class="dlg-actions"><button class="btn primary" data-action="cancel-confirm">Fertig</button></div>`;
+// Aufstellung einfügen: Riot-IDs aus beliebigem Text (Prime-League-Teamseite, op.gg-Multisearch-Link) erkennen,
+// alle laden und die Rollen so verteilen, dass jeder möglichst auf seiner meistgespielten Position landet.
+// Steht eine Rolle in derselben Zeile (oder allein in der Zeile davor), hat sie Vorrang vor den Spieldaten.
+const ROLE_WORDS=[['TOP',/\b(top|toplane|toplaner)\b/i],['JUNGLE',/\b(jungle|jungler|jgl|jng|jg)\b/i],['MIDDLE',/\b(mid|middle|midlane|midlaner)\b/i],['BOTTOM',/\b(adc|ad carry|adcarry|bot|bottom|botlane|marksman)\b/i],['UTILITY',/\b(support|supporter|supp|sup)\b/i]];
+const roleIn=txt=>{const hit=ROLE_WORDS.filter(([,re])=>re.test(txt));return hit.length===1?hit[0][0]:'';};
+function parseRoster(text){
+ let t=String(text||'');try{t=decodeURIComponent(t.replace(/\+/g,' '));}catch{t=t.replace(/%23/gi,'#');}
+ const lines=t.split(/\r?\n|,|;|\|/),out=[],seen=new Set();
+ const idRe=/([\p{L}\p{N}_. ]{3,16}?)\s*#\s*([\p{L}\p{N}]{2,5})(?![\p{L}\p{N}])/gu;
+ lines.forEach((line,li)=>{
+  for(const m of line.matchAll(idRe)){
+   let name=m[1].replace(/^\s*\d+[.)]\s+/,'').replace(/^\s*(game ?account|summoner ?name|riot ?id|spieler|player|ingame)\s+/i,'').trim();
+   let hint='';const lead=name.match(/^(\S+)\s+(.{3,})$/);
+   if(lead&&roleIn(lead[1])&&lead[1].length<=10){hint=roleIn(lead[1]);name=lead[2].trim();}
+   if(name.length<3)continue;
+   const id=`${name}#${m[2]}`,k=id.toLowerCase();if(seen.has(k)||!validRiotId(id))continue;seen.add(k);
+   const rest=line.replace(m[0],' ');const prev=(lines[li-1]||'').trim();
+   hint=hint||roleIn(rest)||(!prev.includes('#')&&prev.length<=20?roleIn(prev):'');
+   out.push({id,hint});
+  }
+ });
+ return out;
+}
+// Beste Verteilung auf die fünf Rollen (höchstens 10 Spieler, also wenige zehntausend Möglichkeiten).
+function assignRoster(list,region){
+ const share=list.map(p=>{const r=(STANDALONE&&riotState(region,p.id)?.data?.roles)||{},tot=Object.values(r).reduce((a,b)=>a+b,0);return ROLES.map(role=>tot?(r[role]||0)/tot:0);});
+ const score=(k,ri)=>(list[k].hint===ROLES[ri]?1000:0)+100*share[k][ri]+(k===ri?.5:0);
+ let best=[],bs=-1;const n=list.length;
+ (function rec(ri,used,acc,sc){
+  if(ri===5){if(sc>bs){bs=sc;best=acc.slice();}return;}
+  let any=false;
+  for(let k=0;k<n;k++){if(used&(1<<k))continue;any=true;acc.push(k);rec(ri+1,used|(1<<k),acc,sc+score(k,ri));acc.pop();}
+  if(!any||n<5){acc.push(-1);rec(ri+1,used,acc,sc);acc.pop();}
+ })(0,0,[],0);
+ return best;
+}
+let rosterMsg='';
+const rosterHtml=()=>`<details class="roster" ${rosterMsg?'open':''}><summary>${icon('users')}Aufstellung einfügen</summary><p class="fine">Kopier die Spielerliste von der Prime-League-Teamseite (oder einen op.gg-Multisearch-Link) hier rein. Riftroom findet die Riot-IDs, lädt alle und ordnet die Rollen nach den gespielten Positionen zu.</p><textarea class="field" id="roster-text" rows="4" placeholder="z. B.\nFaker#KR1\nOner#KR1\n…" aria-label="Aufstellung zum Einfügen" spellcheck="false"></textarea><div class="row"><button class="btn small primary" data-action="roster-import">Erkennen und laden</button><span class="fine" id="roster-status" aria-live="polite">${esc(rosterMsg)}</span></div></details>`;
+function rosterStatus(msg){rosterMsg=msg;const el=$('#roster-status');if(el)el.textContent=msg;}
+async function rosterImport(){
+ const o=selOpp();if(!o)return;
+ const list=parseRoster($('#roster-text')?.value).slice(0,10);
+ if(!list.length){toast('Keine Riot-IDs gefunden. Gesucht wird nach Name#Tag, z. B. Faker#KR1.',true);return;}
+ const region=$('#opp-region')?.value||o.region||'euw';o.region=region;
+ const name=$('#opp-name')?.value.trim();if(name)o.name=name.slice(0,40);
+ const place=()=>{
+  const pick=assignRoster(list,region),old=o.players,ids=new Set(list.map(p=>p.id.toLowerCase()));
+  const keep=id=>old.find(p=>p.riotId&&p.riotId.toLowerCase()===id.toLowerCase());
+  o.players=ROLES.map((r,i)=>{const k=pick[i];if(k>=0){const p=keep(list[k].id);return{riotId:list[k].id,champs:p?.champs||[]};}const cur=old[i];return cur&&cur.riotId&&!ids.has(cur.riotId.toLowerCase())?cur:{riotId:'',champs:[]};});
+  save();
+  const subs=list.filter((p,k)=>!pick.includes(k)).map(p=>p.id);
+  return subs;
+ };
+ const redraw=()=>{if($('#confirm-dialog').open&&selOpp()===o){$('#confirm-dialog').innerHTML=scoutHtml(o);}else if(page==='opponents')render();};
+ let subs=place();
+ if(!STANDALONE){rosterStatus(`${list.length} Riot-IDs eingetragen. Rollen nach Reihenfolge, Spieldaten gibt es nur in der Web-Version.`);redraw();return;}
+ rosterStatus(`${list.length} Riot-IDs erkannt, lade Spieldaten …`);redraw();
+ list.forEach(p=>riotLoad(region,p.id));
+ const t0=Date.now();
+ while(Date.now()-t0<6*60e3){
+  await new Promise(r=>setTimeout(r,700));
+  if(selOpp()!==o)return;
+  const st=list.map(p=>riotState(region,p.id)?.status);const done=st.filter(x=>x==='ok'||x==='error').length;
+  if(done===list.length)break;
+  rosterStatus(`Lade Spieldaten: ${done} von ${list.length} …`);
+ }
+ subs=place();
+ const fail=list.filter(p=>riotState(region,p.id)?.status!=='ok').length;
+ rosterStatus('Rollen nach gespielten Positionen zugeordnet.'+(subs.length?' Ersatz: '+subs.join(', '):'')+(fail?` · ${fail} ohne Daten (Riot-ID prüfen)`:''));
+ redraw();
+ toast('Aufstellung übernommen: '+o.players.map((p,i)=>p.riotId?`${ROLE_NAMES[ROLES[i]]} ${p.riotId.split('#')[0]}`:'').filter(Boolean).join(' · '));
+}
 function openScout(){
  if(!activeOpp()){const o={id:Date.now().toString(36),name:'Gegner',notes:'',favorites:[],region:state.riotRegion||'euw',players:emptyOppPlayers()};state.opponents.push(o);state.opponentId=o.id;save();}
  const o=activeOpp();selectedOpponent=o.id;confirmAction=null;
- $('#confirm-dialog').innerHTML=`<div class="dlg-head"><div><h2 id="confirm-title">Gegner scouten</h2><p class="fine" style="margin-top:4px">Riot-IDs eintragen, Riftroom lädt die letzten Spiele. Was sie wirklich spielen, fließt sofort in die Ban-Vorschläge ein.</p></div><button class="icon-btn" data-action="cancel-confirm" aria-label="Schließen">${icon('close')}</button></div>
- <div class="scout-top"><input class="field grow" id="opp-name" maxlength="40" value="${esc(o.name)}" aria-label="Teamname"><select class="field" id="opp-region" aria-label="Region">${OPP_REGIONS.map(r=>`<option value="${r}" ${o.region===r?'selected':''}>${r.toUpperCase()}</option>`).join('')}</select><button class="btn small" data-riot-all="opp">${icon('refresh')}Alle laden</button></div>
- <div class="scout-list">${o.players.map((p,i)=>`<div class="opp-player"><span class="role-label">${ROLE_NAMES[ROLES[i]]}</span><input class="field" data-opp-riot="${i}" value="${esc(p.riotId)}" placeholder="Name#EUW" maxlength="40" aria-label="Riot-ID ${ROLE_NAMES[ROLES[i]]}" autocomplete="off" spellcheck="false"><button class="icon-btn" data-riot-load="opp|${i}" aria-label="Laden" title="Laden">${icon('refresh')}</button>${riotBox('opp',i)}</div>`).join('')}</div>
- <div class="dlg-actions"><button class="btn primary" data-action="cancel-confirm">Fertig</button></div>`;
+ rosterMsg='';$('#confirm-dialog').innerHTML=scoutHtml(o);
  $('#confirm-dialog').showModal();
  $('#confirm-dialog').addEventListener('close',()=>{if(page==='draft')render();},{once:true});
 }
@@ -517,7 +591,8 @@ function openDraftDialog(){
  <div class="log-form">
   <div><span class="field-label">Eure Seite</span><div class="seg wide side-pick" role="group" aria-label="Eure Seite"><button data-pr-side="blue" aria-pressed="${prSide==='blue'}">Blau</button><button data-pr-side="red" aria-pressed="${prSide==='red'}">Rot</button></div></div>
   <div><span class="field-label">Gegner</span><div class="seg wide" role="group" aria-label="Gegner"><button data-pr-mode="real" aria-pressed="${prMode==='real'}">Echtes Spiel</button><button data-pr-mode="ai" aria-pressed="${prMode==='ai'}">Gegen Computer</button></div><p class="fine" id="pr-mode-hint" style="margin-top:6px">${prMode==='ai'?'Übung gegen den Computer. Nur in diesem Browser.':'Ihr tragt die Picks des Gegners ein. Das Team sieht den Draft live.'}</p></div>
-  <div><span class="field-label">Modus</span><div class="seg wide" role="group" aria-label="Modus"><button data-pr-fearless="off" aria-pressed="${!prFearless}">Einzelspiel</button><button data-pr-fearless="on" aria-pressed="${prFearless}">Fearless-Serie</button></div><p class="fine" id="pr-fl-hint" style="margin-top:6px">${prFearless?FL_HINT:'Ein normaler Draft.'}</p></div>
+  <div><span class="field-label">Modus</span><div class="seg wide three" role="group" aria-label="Modus"><button data-pr-fearless="single" aria-pressed="${prSeries==='single'}">Einzelspiel</button><button data-pr-fearless="series" aria-pressed="${prSeries==='series'}">Serie</button><button data-pr-fearless="fearless" aria-pressed="${prSeries==='fearless'}">Fearless</button></div><p class="fine" id="pr-fl-hint" style="margin-top:6px">${seriesHint()}</p></div>
+  <div id="pr-bo-row" ${prSeries==='single'?'hidden':''}><span class="field-label">Länge</span><div class="seg wide four" role="group" aria-label="Länge">${[2,3,5,0].map(n=>`<button data-pr-bo="${n}" aria-pressed="${prBo===n}">${n?'Bo'+n:'Offen'}</button>`).join('')}</div></div>
   <div id="pr-timer-row" ${prMode==='ai'?'':'hidden'}><span class="field-label">Timer pro Schritt</span><div class="seg wide" role="group" aria-label="Timer"><button data-pr-timer="on" aria-pressed="${prTimer}">30 Sekunden</button><button data-pr-timer="off" aria-pressed="${!prTimer}">Ohne Timer</button></div></div>
   ${state.opponents.length?`<div><label class="field-label" for="pr-opp">Gegnerteam (optional)</label><select class="field" id="pr-opp" style="width:100%"><option value="">Keins</option>${state.opponents.map(o=>`<option value="${esc(o.id)}" ${o.id===state.opponentId?'selected':''}>${esc(o.name)}</option>`).join('')}</select></div>`:''}
  </div>
@@ -525,19 +600,25 @@ function openDraftDialog(){
  $('#confirm-dialog').showModal();
 }
 // Fearless-Serie: Wer in einem Spiel der Serie gepickt wurde, ist danach für beide Teams gesperrt (Bans zählen nicht).
+// Serien: Einzelspiel, normale Serie (z. B. Prime League Bo2) oder Fearless. Gespeichert in state.fearless
+// (Name aus der ersten Version): {game, used, bo: Länge oder 0 = offen, fl: Fearless an/aus}.
+const newSeries=()=>prSeries==='single'?null:{game:1,used:[],bo:prBo,fl:prSeries==='fearless'};
+const seriesHint=()=>prSeries==='fearless'?FL_HINT:prSeries==='series'?'Mehrere Spiele hintereinander, Champions bleiben frei. Prime League Gruppenphase: Bo2.':'Ein normaler Draft.';
+const seriesLabel=f=>f.fl!==false?`Fearless · Spiel ${f.game}${f.bo?` von ${f.bo}`:''}`:`Bo${f.bo||'?'} · Spiel ${f.game}${f.bo?` von ${f.bo}`:''}`;
 const FL_HINT='Was in einem Spiel gepickt wurde, ist für den Rest der Serie für beide Teams gesperrt. So spielen seit 2025 auch die Profiligen.';
 function flUsedHtml(){
  const f=state.fearless;if(!f)return'';
- return`<div class="fl-used"><span class="fl-tag">Fearless</span><span class="fine">Spiel ${f.game}${f.used.length?` · ${f.used.length} gesperrt`:' · noch nichts gesperrt'}</span>${f.used.length?`<div class="fl-row">${f.used.map(id=>`<img src="${SQUARE[id]}" alt="${esc(cname(id))}" title="${esc(cname(id))}">`).join('')}</div>`:''}</div>`;
+ if(f.fl===false)return`<div class="fl-used"><span class="fl-tag series">Bo${f.bo||'?'}</span><span class="fine">Spiel ${f.game}${f.bo?` von ${f.bo}`:''}</span></div>`;
+ return`<div class="fl-used"><span class="fl-tag">Fearless</span><span class="fine">Spiel ${f.game}${f.bo?` von ${f.bo}`:''}${f.used.length?` · ${f.used.length} gesperrt`:' · noch nichts gesperrt'}</span>${f.used.length?`<div class="fl-row">${f.used.map(id=>`<img src="${SQUARE[id]}" alt="${esc(cname(id))}" title="${esc(cname(id))}">`).join('')}</div>`:''}</div>`;
 }
-function flNextHtml(){return`<div class="fl-next"><span class="fine">Nächstes Spiel der Serie, eure Seite:</span><div class="row"><button class="btn" data-fl-next="blue">Blau</button><button class="btn" data-fl-next="red">Rot</button></div></div>`;}
+function flNextHtml(){const f=state.fearless;if(f.bo&&f.game>=f.bo)return`<div class="fl-next"><span class="fine">Serie beendet: alle ${f.bo} Spiele gedraftet.</span></div>`;const sw=state.side==='blue'?'red':'blue',b=s=>`<button class="btn ${s===sw?'primary':''}" data-fl-next="${s}">${s==='blue'?'Blau':'Rot'}${s===sw?' <small>(getauscht)</small>':''}</button>`;return`<div class="fl-next"><span class="fine">Spiel ${f.game+1} der Serie, eure Seite:</span><div class="row">${b('blue')}${b('red')}</div></div>`;}
 function fearlessNext(side){
  const f=state.fearless;if(!f)return;
- const next={game:f.game+1,used:[...new Set([...f.used,...state.allies,...state.enemies].filter(Boolean))]};
+ const next={game:f.game+1,bo:f.bo||0,fl:f.fl!==false,used:f.fl===false?[]:[...new Set([...f.used,...state.allies,...state.enemies].filter(Boolean))]};
  if(practice)startPractice({timer:practice.timer,side,opponentId:state.opponentId,fearless:next});else startRealDraft(side,state.opponentId,next);
- toast(`Spiel ${next.game} der Fearless-Serie: ${next.used.length} Champions sind gesperrt.`);
+ toast(next.fl?`Spiel ${next.game} der Fearless-Serie: ${next.used.length} Champions sind gesperrt.`:`Spiel ${next.game} der Serie, Seiten: ${side==='blue'?'Blau':'Rot'}.`);
 }
-function startRealDraft(side,opponentId,fearless=prFearless?{game:1,used:[]}:null){
+function startRealDraft(side,opponentId,fearless=newSeries()){
  guide.markDrafted();resetTeamWishes();
  Object.assign(state,{allies:Array(5).fill(null),enemies:Array(5).fill(null),bans:Array(10).fill(null),draftMode:'tournament',side,opponentId,selectedRole:0,draftActive:true,fearless});
  undoStack=[];clearDraftView();page='draft';save();render();window.scrollTo({top:0,behavior:'instant'});
@@ -1472,7 +1553,8 @@ document.addEventListener('click',e=>{
  if(el.dataset.csTarget){const [type,i]=el.dataset.csTarget.split('|');if(type==='allies')state.selectedRole=Number(i);else enemyRole=Number(i);render();return;}
  if(el.dataset.csRole){csRole=el.dataset.csRole;document.querySelectorAll('[data-cs-role]').forEach(b=>b.setAttribute('aria-pressed',String(b===el)));const g=$('#cs-grid');if(g)g.innerHTML=csGrid();return;}
  if(el.dataset.flNext){fearlessNext(el.dataset.flNext);return;}
- if(el.dataset.prFearless){prFearless=el.dataset.prFearless==='on';document.querySelectorAll('[data-pr-fearless]').forEach(b=>b.setAttribute('aria-pressed',String(b===el)));const h=$('#pr-fl-hint');if(h)h.textContent=prFearless?FL_HINT:'Ein normaler Draft.';return;}
+ if(el.dataset.prFearless){prSeries=el.dataset.prFearless;document.querySelectorAll('[data-pr-fearless]').forEach(b=>b.setAttribute('aria-pressed',String(b===el)));const h=$('#pr-fl-hint');if(h)h.textContent=seriesHint();const r=$('#pr-bo-row');if(r)r.hidden=prSeries==='single';return;}
+ if(el.dataset.prBo){prBo=+el.dataset.prBo;document.querySelectorAll('[data-pr-bo]').forEach(b=>b.setAttribute('aria-pressed',String(b===el)));return;}
  if(el.dataset.prMode){prMode=el.dataset.prMode;document.querySelectorAll('[data-pr-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b===el)));const h=$('#pr-mode-hint');const tr=$('#pr-timer-row');if(tr)tr.hidden=prMode!=='ai';if(h)h.textContent=prMode==='ai'?'Übung gegen den Computer. Nur in diesem Browser.':'Ihr tragt die Picks des Gegners ein. Das Team sieht den Draft live.';return;}
  if(el.dataset.muEdit){showMatchupDialog(el.dataset.muEdit);return;}
  if(el.dataset.muSave){const id=el.dataset.muSave,t=($('#mu-text')?.value||'').trim().slice(0,500);if(t)state.matchups[id]=t;else delete state.matchups[id];save();$('#confirm-dialog').close();render();toast(t?`Notiz zu ${cname(id)} gespeichert.`:`Notiz zu ${cname(id)} entfernt.`);return;}
@@ -1483,11 +1565,12 @@ document.addEventListener('click',e=>{
  const action=el.dataset.action;if(!action)return;
  if(action==='log-game')showLogGame();
  if(action==='draft-open')openDraftDialog();
- if(action==='draft-start'){const opp=$('#pr-opp')?.value||'';$('#confirm-dialog').close();saveDraftOpts();if(prMode==='ai')startPractice({side:prSide,opponentId:opp,timer:prTimer,fearless:prFearless?{game:1,used:[]}:null});else startRealDraft(prSide,opp);}
+ if(action==='roster-import'){rosterImport();return;}
+ if(action==='draft-start'){const opp=$('#pr-opp')?.value||'';$('#confirm-dialog').close();saveDraftOpts();if(prMode==='ai')startPractice({side:prSide,opponentId:opp,timer:prTimer,fearless:newSeries()});else startRealDraft(prSide,opp);}
  if(action==='lock-in')lockIn();
  if(action==='undo'){const u=undoStack.pop();if(u){state[u.type][u.index]=null;if(u.type==='allies')state.selectedRole=u.index;csKey=null;save();render();}}
  if(action==='draft-end'){if(practice)endPractice();else if(draftTurn(state).finished)endDraft();else confirmDialog('Draft abbrechen?','Alle Picks und Bans dieses Drafts werden geleert.',()=>{endDraft();toast('Draft abgebrochen.');});}
- if(action==='practice-again'&&practice)startPractice({timer:practice.timer,side:state.side,opponentId:state.opponentId,fearless:state.fearless?{game:1,used:[]}:null});
+ if(action==='practice-again'&&practice)startPractice({timer:practice.timer,side:state.side,opponentId:state.opponentId,fearless:state.fearless?{...state.fearless,game:1,used:[]}:null});
  if(action==='practice-end')endPractice();
  if(action==='copy-discord')copyText(discordText(),'Für Discord');
  if(action==='plan-regen')generatePlan(draftKey(),true);

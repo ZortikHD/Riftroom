@@ -209,7 +209,7 @@ const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 // schon gepickt, zählt das Lane-Duell mit. Champions, die auf der Rolle kaum gespielt werden, gelten als Off-Meta.
 export function recommend(state,catalog,now=Date.now(),mu=null){
  const index=state.selectedRole,role=ROLES[index],player=state.players[index];
- const occupied=new Set([...state.allies,...state.enemies,...state.bans,...(state.fearless?.used||[])].filter(Boolean));
+ const occupied=new Set([...state.allies,...state.enemies,...state.bans,...(state.fearless?.fl!==false?state.fearless?.used||[]:[])].filter(Boolean));
  const peers=state.allies.filter((_,i)=>i!==index);const team=composition(peers),enemy=composition(state.enemies);
  const patch=state.targetPatch||catalog.version;const live=metaStatus(state.meta,patch,now).ok;
  const foe=state.enemies[index]&&state.enemies[index]!=='none'?state.enemies[index]:null,laneRows=foe?mu?.roles?.[role]?.[foe]:null;
@@ -248,7 +248,7 @@ export function validateState(s,catalog){
  if(s.targetPatch&&!/^\d{1,2}\.\d{1,2}(\.\d+)?$/.test(s.targetPatch))throw Error('Invalid target patch.');base.targetPatch=s.targetPatch||'';
  if(s.feedUrl){const u=new URL(s.feedUrl);if(u.protocol!=='https:'||u.username||u.password||u.search||u.hash)throw Error('The data URL must use HTTPS and must not contain credentials or query parameters.');base.feedUrl=u.href;}
  if(s.meta)base.meta=validateMeta(s.meta,ids);base.metaImported=!!(s.metaImported&&base.meta);
- base.fearless=s.fearless&&Number.isInteger(s.fearless.game)&&s.fearless.game>=1&&s.fearless.game<=9&&Array.isArray(s.fearless.used)?{game:s.fearless.game,used:[...new Set(s.fearless.used.filter(id=>ids.has(id)))].slice(0,60)}:null;base.lastChecked=typeof s.lastChecked==='string'&&Number.isFinite(Date.parse(s.lastChecked))?s.lastChecked:null;
+ base.fearless=s.fearless&&Number.isInteger(s.fearless.game)&&s.fearless.game>=1&&s.fearless.game<=9&&Array.isArray(s.fearless.used)?{game:s.fearless.game,used:[...new Set(s.fearless.used.filter(id=>ids.has(id)))].slice(0,60),bo:[0,2,3,5].includes(s.fearless.bo)?s.fearless.bo:0,fl:s.fearless.fl!==false}:null;base.lastChecked=typeof s.lastChecked==='string'&&Number.isFinite(Date.parse(s.lastChecked))?s.lastChecked:null;
  base.seenPatch=typeof s.seenPatch==='string'&&/^\d{1,2}\.\d{1,2}$/.test(s.seenPatch)?s.seenPatch:'';
  base.templates=(Array.isArray(s.templates)?s.templates:[]).slice(0,20).flatMap(t=>{try{if(!t||typeof t.name!=='string')return[];const pick=(a,n)=>{if(!Array.isArray(a)||a.length!==n)throw Error();return a.map(id=>{if(id===null)return null;if(id==='none'&&n===10)return 'none';if(!ids.has(id))throw Error();return id;});};return[{id:String(t.id||t.name).slice(0,30),name:t.name.slice(0,40),allies:pick(t.allies,5),enemies:pick(t.enemies,5),bans:pick(t.bans,10)}];}catch{return[];}});
  base.draftMode=s.draftMode==='tournament'?'tournament':'free';base.draftActive=!!s.draftActive;base.side=s.side==='red'?'red':'blue';

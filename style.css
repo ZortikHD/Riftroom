@@ -1863,3 +1863,11 @@ dialog>:last-child:not(.dlg-actions){margin-bottom:22px}
 /* Schwer: fünf Angebote nebeneinander, am Handy 3+2 */
 @media (min-width:701px){.pz-opts:has(>:nth-child(5)){grid-template-columns:repeat(5,minmax(0,1fr))}}
 @media (max-width:700px){.pz-opts:has(>:nth-child(5)){grid-template-columns:repeat(6,minmax(0,1fr))}.pz-opts:has(>:nth-child(5))>*{grid-column:span 2}.pz-opts:has(>:nth-child(5))>:nth-child(4){grid-column:2/span 2}}
+/* Patch-Wissen */
+.chg{display:inline-block;margin-left:6px;padding:0 6px;border-radius:999px;font:600 10px/16px var(--f-body);letter-spacing:.04em;text-transform:uppercase;vertical-align:1px;color:var(--warn);background:color-mix(in srgb,var(--warn) 14%,transparent)}
+.champ-btn.chg-dot{position:relative}
+.champ-btn.chg-dot::after{content:"";position:absolute;top:5px;right:5px;width:8px;height:8px;border-radius:50%;background:var(--warn);box-shadow:0 0 0 2px var(--surface)}
+.chg-card{display:flex;flex-direction:column;gap:10px}
+.chg-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.chg-row{display:flex;flex-wrap:wrap;gap:6px}
+.bis-done{font-size:11px;color:var(--faint);font-weight:500}

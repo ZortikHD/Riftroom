@@ -9,7 +9,9 @@ target = os.path.join(repo, 'data', 'meta.json')
 old = json.load(open(target)) if os.path.exists(target) else {}
 meta = {'catalog': load('catalog.json')['catalog'], 'current': load('current.json'),
         'previous': load('previous.json') or old.get('previous'),
-        'bis': (load('bis.json') or {}).get('solo') or old.get('bis')}
+        'bis': (load('bis.json') or {}).get('solo') or old.get('bis'),
+        'bisElite': (load('bis.json') or {}).get('elite') or old.get('bisElite'),
+        'patchnotes': load('patchnotes.json') or old.get('patchnotes')}
 assert meta['current']['snapshot']['entries'], 'keine Winrates'
 json.dump(meta, open(target, 'w'), separators=(',', ':'), ensure_ascii=False)
 print('ok', meta['current']['snapshot']['patch'])

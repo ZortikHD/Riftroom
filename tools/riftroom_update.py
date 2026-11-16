@@ -87,8 +87,27 @@ try:
     bis = {'label': 'Solo Queue Master+', 'patch': cur['patch'], 'region': 'Global', 'asOf': now(), 'roles': roles}
 except NoData as e:
     note += f' | Best in Slot nicht aktualisiert: {e}'
+# Best in Slot „Elite“: Grandmaster und Challenger, also dort, wo Profis außerhalb der Saison spielen.
+# Kleinere Stichprobe: ab 300 Spielen, Winrate mit 500 virtuellen Spielen Richtung 50 % geglättet.
+elite = None
+try:
+    roles = {}; games_total = 0
+    for lane, role in LANES.items():
+        d = lane_data(cur['patch'], lane, 'grandmaster_plus'); rows = []
+        games_total = max(games_total, int(d.get('analysed') or 0))
+        for key, v in d['cid'].items():
+            cid = id_by_key.get(str(key)); g = round(float(v.get('games') or 0)); wr = float(v.get('wr') or 0); pr = float(v.get('pr') or 0)
+            if not cid or v.get('lane') != lane or g < 300 or pr < 2 or not (0 < wr < 100): continue
+            rows.append([cid, round(wr, 1), round(pr, 1), g, (wr / 100 * g + 0.5 * 500) / (g + 500)])
+        rows.sort(key=lambda x: -x[4])
+        if len(rows) < 3: raise NoData(f'GM+ {lane}: zu wenige Zeilen')
+        roles[role] = [r[:4] for r in rows[:6]]
+        time.sleep(0.6)
+    elite = {'label': 'Solo Queue Grandmaster+', 'patch': cur['patch'], 'region': 'Global', 'asOf': now(), 'matches': games_total, 'roles': roles}
+except NoData as e:
+    note += f' | Elite-Liste nicht aktualisiert: {e}'
 json.dump({'catalog': catalog}, open(os.path.join(out, 'catalog.json'), 'w'))
 json.dump({'snapshot': cur}, open(os.path.join(out, 'current.json'), 'w'))
 if prev: json.dump({'snapshot': prev}, open(os.path.join(out, 'previous.json'), 'w'))
-if bis: json.dump({'solo': bis}, open(os.path.join(out, 'bis.json'), 'w'))
-print('ok', 'katalog', ver, 'winrates', cur['patch'], len(cur['entries']), 'zeilen', 'vergleich', prev['patch'] if prev else '-', 'bis', 'ja' if bis else 'nein', note)
+if bis or elite: json.dump({'solo': bis, 'elite': elite}, open(os.path.join(out, 'bis.json'), 'w'))
+print('ok', 'katalog', ver, 'winrates', cur['patch'], len(cur['entries']), 'zeilen', 'vergleich', prev['patch'] if prev else '-', 'bis', 'ja' if bis else 'nein', 'elite', 'ja' if elite else 'nein', note)

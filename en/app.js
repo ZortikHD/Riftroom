@@ -2,7 +2,7 @@ import BUNDLED_CATALOG from './catalog.js';
 // Champion-Bilder liegen als kleine Einzeldateien neben der Seite (img/sq, img/ld) und laden erst, wenn sie gebraucht werden.
 const imgPath=dir=>new Proxy({},{get:(_,id)=>typeof id==='string'&&/^[A-Za-z0-9]+$/.test(id)?`img/${dir}/${id}.webp`:undefined});
 const SQUARE=imgPath('sq'),LOADING=imgPath('ld');
-import {ROLES,ROLE_NAMES,OPP_REGIONS,emptyOppPlayers,profileOf,learnRoles,useCatalog,initialState,composition,recommend,metaStatus,validateMeta,validateState,shortPatch,LIM,adj,adjMu} from './engine.js';
+import {ROLES,ROLE_NAMES,OPP_REGIONS,emptyOppPlayers,profileOf,learnRoles,useCatalog,initialState,composition,recommend,metaStatus,validateMeta,validateState,shortPatch,LIM,adj,adjMu,setFirstPick,firstPickData} from './engine.js';
 import {poolCheck,banPlan,biggestChanges,draftTurn} from './insights.js';
 import {renderMini,mountMini,handleMiniClick,handleMiniInput,handleMiniSubmit} from './minigame.js';
 import {renderPuzzle,handlePuzzleClick,afterPuzzle,miniStats,setMatchups,getMatchups} from './puzzles.js';
@@ -210,7 +210,9 @@ function renderDraft(){
  if(!draftStarted()){lastPhaseKey=null;return renderDraftStart();}
  const t=draftTurn(state),c=t.current,tgt=stepTarget(c),ours=sideOf('us'),theirs=sideOf('them');
  const key=t.finished?'done':`${c.i}|${tgt.index}`;
- if(key!==csKey){csKey=key;hoverId=null;pickRole=null;csSearch='';csRole=tgt&&tgt.type!=='bans'?ROLES[tgt.index]:'ALL';}
+ if(key!==csKey){csKey=key;hoverId=null;pickRole=null;csSearch='';csRole=tgt&&tgt.type!=='bans'?ROLES[tgt.index]:'ALL';
+  // First pick (red: the first two): preselect the role tournament teams usually take at this point.
+  if(c&&c.who==='us'&&c.type==='pick'&&room?.role!=='viewer'&&firstPickData()&&state.allies.filter(Boolean).length<(state.side==='red'?2:1)){const a=roleAdvice();if(a.length&&a[0].score>=2){pickRole=a[0].i;csRole=ROLES[a[0].i];}}}
  const opp=activeOpp(),aiTurn=practice&&c&&c.who==='them';
  // Kopf
  const sub=`${state.side==='red'?'Red':'Blue'} side · vs ${esc(opp?.name||(practice?'the computer':'Opponent'))}${practice?' · Practice':''}${state.fearless?` · ${seriesLabel(state.fearless)}`:''}`;
@@ -298,8 +300,10 @@ function roleAdvice(){
   const pool=state.players[i].pool,free=pool.filter(v=>!tk.has(v.id)).length;
   if(pool.length&&free<=1){score+=3;reasons.push(free?'Pool almost empty: only 1 left':'Pool empty: secure it now');}
   else if(pool.length&&free===2){score+=1;reasons.push('Pool getting thin: 2 left');}
-  const blindLate=!enemy.certain.has(r)&&picksDone<3&&BLIND[r]<1;
-  if(!enemy.certain.has(r)&&picksDone<3){score+=BLIND[r];if(BLIND[r]>=1)reasons.push('Safe blind pick');}
+  const fp=firstPickData(),row=fp&&picksDone<5?fp.order?.[state.side==='red'?'red':'blue']?.[picksDone]:null,openSum=row?open.reduce((a,j)=>a+(row[j]||0),0):0,share=row&&openSum?(row[i]||0)/openSum*100:null;
+  const blindLate=!enemy.certain.has(r)&&picksDone<3&&(share!=null?share<12:BLIND[r]<1);
+  if(share!=null&&!enemy.certain.has(r)&&picksDone<3){score+=share/12;if(share>=20)reasons.push(`Often pick ${picksDone+1} in tournaments (${Math.round(share)}%)`);}
+  else if(!enemy.certain.has(r)&&picksDone<3){score+=BLIND[r];if(BLIND[r]>=1)reasons.push('Safe blind pick');}
   const best=rec({...state,selectedRole:i,poolOnly:false})[0];
   if(best&&best.score>=75){score+=1;reasons.push(`Strong pick available: ${cname(best.id)}`);}
   if(!reasons.length)reasons.push(blindLate?'Better later, easy to counter now':'Open');
@@ -933,7 +937,7 @@ function renderMeta(){
   const list=(rows,empty)=>rows.length?`<ul class="pc-list">${rows.map(r=>`<li>${portrait(r.id,'av sm')}<span class="pc-name">${esc(cname(r.id))}${chgTag(r.id)} <span class="muted">${ROLE_NAMES[r.role]}</span></span><span class="num">${pct(r.wr)}</span>${deltaTag(r.delta)}</li>`).join('')}</ul>`:`<p class="fine">${empty}</p>`;
   body=prev?`<div class="two"><section class="card"><h3 class="card-title">Risers</h3>${list(ch.risers,'No data.')}</section><section class="card"><h3 class="card-title">Fallers</h3>${list(ch.fallers,'No fallers.')}</section></div><p class="fine">${prev.span?`${esc(recentMeta?.span||'')} vs ${esc(prev.span)}, only champions with at least ${int(LIM.trend)} games in both years.`:`Since patch ${esc(shortPatch(prev.patch))}, only champions with at least ${int(LIM.trend)} games in both patches.`}</p>`:'<section class="card empty"><p>Trends need comparison data.</p></section>';
  }else{
-  body=`<section class="card flush"><div class="filters"><div class="search">${icon('search')}<input class="field" id="meta-search" placeholder="Search champion" value="${esc(metaSearch)}" aria-label="Search champion"></div><select class="field" id="meta-role" aria-label="Filter by role"><option value="ALL">All roles</option>${ROLES.map(r=>`<option value="${r}" ${metaRole===r?'selected':''}>${ROLE_NAMES[r]}</option>`).join('')}</select><select class="field" id="meta-sort" aria-label="Sort"><option value="adjusted" ${metaSort==='adjusted'?'selected':''}>Smoothed win rate</option><option value="wins" ${metaSort==='wins'?'selected':''}>Win rate</option><option value="games" ${metaSort==='games'?'selected':''}>Games</option></select></div><div id="meta-table">${metaTable()}</div></section><p class="fine">Smoothed = (wins + ${LIM.prior}) / (games + ${2*LIM.prior}). This pulls small samples towards 50%.</p>`;
+  body=`<section class="card flush"><div class="filters"><div class="search">${icon('search')}<input class="field" id="meta-search" placeholder="Search champion" value="${esc(metaSearch)}" aria-label="Search champion"></div><select class="field" id="meta-role" aria-label="Filter by role"><option value="ALL">All roles</option>${ROLES.map(r=>`<option value="${r}" ${metaRole===r?'selected':''}>${ROLE_NAMES[r]}</option>`).join('')}</select><select class="field" id="meta-sort" aria-label="Sort"><option value="adjusted" ${metaSort==='adjusted'?'selected':''}>Smoothed win rate</option><option value="wins" ${metaSort==='wins'?'selected':''}>Win rate</option><option value="games" ${metaSort==='games'?'selected':''}>Games</option></select></div><div id="meta-table">${metaTable()}</div></section><p class="fine">Smoothed = (wins + ${LIM.prior}) / (games + ${2*LIM.prior}). This pulls small samples towards 50%.${state.meta?.span?' Here, and for pick and ban rate, newer games count more: a game from five months ago counts half as much as one from today.':''}</p>`;
  }
  const note=!s.ok?`<div class="banner warn">These win rates are currently not used in recommendations: ${esc(s.label)}.</div>`:s.fallback?`<div class="banner">Patch ${esc(shortPatch(currentPatch()))} is new and has too few games yet. Until there is enough data, we show and use the win rates from patch ${esc(shortPatch(m.patch))}.</div>`:'';
  return head('Meta',sub)+chgList+note+`<div class="subtabs" role="tablist">${META_TABS.map(([k,l])=>`<button role="tab" data-meta-tab="${k}" aria-selected="${metaTab===k}">${l}</button>`).join('')}</div>`+body;
@@ -1314,7 +1318,7 @@ function onRecent(d){if(!d)return;try{recentMeta=validateMeta(d.snapshot,champId
 // Best in Slot: täglich aktualisiert. Nur übernehmen, wenn das Format stimmt.
 function onBis(b,key='solo'){try{if(!b||!b.roles||!ROLES.every(r=>Array.isArray(b.roles[r])&&b.roles[r].length>=3&&b.roles[r].every(x=>Array.isArray(x)&&typeof x[0]==='string'&&isFinite(x[1])&&isFinite(x[2]))))return;BIS[key]={label:String(b.label||''),patch:String(b.patch||''),region:String(b.region||'Global'),asOf:String(b.asOf||''),matches:Number(b.matches)||0,roles:Object.fromEntries(ROLES.map(r=>[r,b.roles[r].slice(0,6).map(x=>[x[0],Number(x[1]),Number(x[2]),Number(x[3])||0])]))};if(page==='team')render();}catch{}}
 async function loadStatic(){
- try{const r=await fetch('data/meta.json',{cache:'no-cache'});if(!r.ok)throw Error();const d=await r.json();onCatalog(d.catalog);onPatchnotes(d.patchnotes);onPrevious(d.previous);onRecent(d.recent);onCurrent(d.current);onBis(d.bis);onBis(d.bisElite,'elite');if(d.bisPro)for(const k of ['top','all','prime'])onBis(d.bisPro[k],k);}
+ try{const r=await fetch('data/meta.json',{cache:'no-cache'});if(!r.ok)throw Error();const d=await r.json();onCatalog(d.catalog);onPatchnotes(d.patchnotes);onPrevious(d.previous);onRecent(d.recent);onCurrent(d.current);onBis(d.bis);onBis(d.bisElite,'elite');if(d.bisPro)for(const k of ['top','all','prime'])onBis(d.bisPro[k],k);setFirstPick(d.firstPick);if(page==='draft')render();}
  catch{refreshMessage='The win rates couldn\'t be loaded right now. Check your internet connection and reload the page.';render();}
 }
 async function connect(){

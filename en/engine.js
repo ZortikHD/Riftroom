@@ -6,7 +6,8 @@ export const ROLES=['TOP','JUNGLE','MIDDLE','BOTTOM','UTILITY'];
 const LIM_SOLO={role:500,strong:2500,prior:100,mu:100,muPick:130,muPrior:70,trend:1250};
 export const LIM={...LIM_SOLO};
 export function setLimits(l){if(!l||typeof l!=='object')return;for(const k of Object.keys(LIM))if(Number.isFinite(l[k])&&l[k]>0&&l[k]<1e6)LIM[k]=l[k];}
-export const adj=e=>(e.wins+LIM.prior)/(e.games+2*LIM.prior);
+// With tournament data newer games count more (wg/ww = weighted games/wins).
+export const adj=e=>((e.ww??e.wins)+LIM.prior)/((e.wg??e.games)+2*LIM.prior);
 export const adjMu=(wr,n)=>(wr*n+50*LIM.muPrior)/(n+LIM.muPrior);
 export const ROLE_NAMES={TOP:'Top',JUNGLE:'Jungle',MIDDLE:'Mid',BOTTOM:'Bot',UTILITY:'Support'};
 // Editorial archetypes: role | damage (physical/magic/mixed) | frontline | engage | peel | scaling.
@@ -208,7 +209,8 @@ export function validateMeta(value,ids,now=Date.now()){
  const date=Date.parse(value.updatedAt);if(!Number.isFinite(date)||date>now+300000)throw Error('Invalid data timestamp.');
  if(!Number.isInteger(value.matches)||value.matches<1)throw Error('matches must contain the number of analyzed games.');
  if(!Array.isArray(value.entries)||value.entries.length<1||value.entries.length>1500)throw Error('entries must contain 1–1500 stat rows.');
- const seen=new Set();const entries=value.entries.map(e=>{if(!e||!ids.has(e.champion)||!ROLES.includes(e.role))throw Error('Unknown champion or invalid role.');const k=e.champion+e.role;if(seen.has(k))throw Error('Duplicate champion-role combination.');seen.add(k);if(!Number.isInteger(e.games)||e.games<1||e.games>value.matches||!Number.isInteger(e.wins)||e.wins<0||e.wins>e.games)throw Error('games/wins are invalid or larger than the sample.');for(const f of ['pickRate','banRate'])if(e[f]!=null&&(typeof e[f]!=='number'||!Number.isFinite(e[f])||e[f]<0||e[f]>100))throw Error(`${f} must be between 0 and 100.`);return{champion:e.champion,role:e.role,games:e.games,wins:e.wins,...(e.pickRate!=null?{pickRate:e.pickRate}:{}),...(e.banRate!=null?{banRate:e.banRate}:{})};});
+ const seen=new Set();const entries=value.entries.map(e=>{if(!e||!ids.has(e.champion)||!ROLES.includes(e.role))throw Error('Unknown champion or invalid role.');const k=e.champion+e.role;if(seen.has(k))throw Error('Duplicate champion-role combination.');seen.add(k);if(!Number.isInteger(e.games)||e.games<1||e.games>value.matches||!Number.isInteger(e.wins)||e.wins<0||e.wins>e.games)throw Error('games/wins are invalid or larger than the sample.');for(const f of ['pickRate','banRate'])if(e[f]!=null&&(typeof e[f]!=='number'||!Number.isFinite(e[f])||e[f]<0||e[f]>100))throw Error(`${f} must be between 0 and 100.`);const wgt=Number.isFinite(e.wg)&&Number.isFinite(e.ww)&&e.wg>0&&e.ww>=0&&e.ww<=e.wg&&e.wg<=e.games?{wg:e.wg,ww:e.ww}:{};
+ return{champion:e.champion,role:e.role,games:e.games,wins:e.wins,...wgt,...(e.pickRate!=null?{pickRate:e.pickRate}:{}),...(e.banRate!=null?{banRate:e.banRate}:{})};});
  const extra={};if(typeof value.span==='string'&&/^[\d–-]{4,9}$/.test(value.span))extra.span=value.span;if(value.limits&&typeof value.limits==='object'){extra.limits=Object.fromEntries(Object.entries(value.limits).filter(([k,v])=>k in LIM&&Number.isFinite(v)&&v>0&&v<1e6));}Object.assign(LIM,LIM_SOLO);setLimits(extra.limits);
  return{schemaVersion:1,...Object.fromEntries(['source','patch','updatedAt','region','rank','queue','matches'].map(k=>[k,value[k]])),...extra,entries};
 }
@@ -216,16 +218,21 @@ export function composition(ids){const p=ids.filter(Boolean).map(id=>profileOf(i
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 // mu: Matchup-Winrates (roles[rolle][gegner] = [[champion, winrate gegen gegner, spiele], …]). Ist der Gegner auf dieser Rolle
 // schon gepickt, zählt das Lane-Duell mit. Champions, die auf der Rolle kaum gespielt werden, gelten als Off-Meta.
+// First picks from tournaments (data/meta.json firstPick): per side, which champions get picked first per role.
+let FIRST=null;export function setFirstPick(f){FIRST=f&&f.champs&&f.order?f:null;}export const firstPickData=()=>FIRST;
 export function recommend(state,catalog,now=Date.now(),mu=null){
  const index=state.selectedRole,role=ROLES[index],player=state.players[index];
  const occupied=new Set([...state.allies,...state.enemies,...state.bans,...(state.fearless?.fl!==false?state.fearless?.used||[]:[])].filter(Boolean));
  const peers=state.allies.filter((_,i)=>i!==index);const team=composition(peers),enemy=composition(state.enemies);
+ // What the team lacks only matters once something is picked. An empty team at first pick is no reason for a tank.
+ const picked=state.allies.filter(Boolean).length,need=picked===0?0.25:picked===1?0.6:1,side=state.side==='red'?'red':'blue';
+ const firstRound=!!FIRST&&picked<(side==='red'?2:1),fpRows=firstRound?FIRST.champs?.[side]?.[role]||[]:[],fpMax=Math.max(0,...fpRows.map(x=>x[1]));
  const patch=state.targetPatch||catalog.version;const live=metaStatus(state.meta,patch,now).ok;
  const foe=state.enemies[index]&&state.enemies[index]!=='none'?state.enemies[index]:null,laneRows=foe?mu?.roles?.[role]?.[foe]:null;
  return catalog.champions.filter(c=>!occupied.has(c.id)&&profileOf(c.id)?.roles.includes(role)&&(!state.poolOnly||player.pool.some(p=>p.id===c.id))).map(c=>{
   const p=profileOf(c.id),pool=player.pool.find(x=>x.id===c.id),reasons=[];
   const comfort=pool?20+pool.comfort*16:35;
-  let fit=50;if(team.front<3){fit+=p.front*7;if(p.front>=2)reasons.push('Frontline');}if(team.engage<3){fit+=p.engage*5;if(p.engage>=2)reasons.push('Engage');}
+  let fit=50;if(team.front<3){fit+=p.front*7*need;if(p.front>=2&&need>=.6)reasons.push('Frontline');}if(team.engage<3){fit+=p.engage*5*need;if(p.engage>=2&&need>=.6)reasons.push('Engage');}
   if(team.physical>team.magic&&p.damage==='magic'){fit+=15;reasons.push('Magic damage');}if(team.magic>team.physical&&p.damage==='physical'){fit+=15;reasons.push('Physical damage');}
   if(team.scaling>=5&&p.peel>=2){fit+=10;reasons.push('Protects carries');}fit=clamp(fit,0,100);
   let response=50;if(enemy.engage>=4){response+=p.peel*12;if(p.peel>=2)reasons.push('Peel vs engage');}if(enemy.front>=5&&p.scaling>=3){response+=15;reasons.push('Scaling vs frontline');}response=clamp(response,0,100);
@@ -236,10 +243,11 @@ export function recommend(state,catalog,now=Date.now(),mu=null){
   if(live&&!stat){meta=30;reasons.push('Off-Meta');}
   // Unter 1 % Pickrate auf der Rolle: Nischen-Pick. Die Winrate ist oft geschönt, weil ihn fast nur Spezialisten spielen.
   else if(live&&!pool&&(stat.pickRate??1)<1){meta=Math.min(meta,40);reasons.push('Nische');}
+  const fpRow=fpRows.find(x=>x[0]===c.id),fpVal=fpRow&&fpMax?40+60*fpRow[1]/fpMax:30;if(fpRow&&fpRow[1]>=fpMax*.35)reasons.unshift('Common first pick');
   // Lane-Duell gegen den schon gepickten Gegner (Richtung 50 % geglättet).
   let lane=null,matchup=null;const lr=laneRows?.find(x=>x[0]===c.id);
   if(lr&&lr[2]>=LIM.mu){const a=adjMu(lr[1],lr[2]);matchup={foe,wr:a,n:lr[2]};lane=clamp(50+(a-50)*8,0,100);if(a>=51.5)reasons.unshift('Matchup+');else if(a<=48.5)reasons.unshift('Matchup-');}
-  const components=[{label:'Champion pool',value:comfort,weight:.35},{label:'Team composition',value:fit,weight:.4},...(enemy.known?[{label:'Opponent profile',value:response,weight:.15}]:[]),...(meta!==null?[{label:'Meta data',value:meta,weight:.25}]:[]),...(lane!==null?[{label:'Lane-Duell',value:lane,weight:.3}]:[])];
+  const components=[{label:'Champion pool',value:comfort,weight:.35},{label:'Team composition',value:fit,weight:.4},...(enemy.known?[{label:'Opponent profile',value:response,weight:.15}]:[]),...(meta!==null?[{label:'Meta data',value:meta,weight:.25}]:[]),...(lane!==null?[{label:'Lane-Duell',value:lane,weight:.3}]:[]),...(firstRound?[{label:'Tournament first pick',value:fpVal,weight:.35}]:[])];
   const total=components.reduce((a,v)=>a+v.weight,0);let raw=components.reduce((a,v)=>a+v.value*v.weight,0)/total;
   // Off-Meta- und Nischen-Picks außerhalb des Pools nur, wenn sonst wirklich alles passt.
   if(!pool&&reasons.includes('Off-Meta'))raw*=0.85;else if(!pool&&reasons.includes('Nische'))raw*=0.9;

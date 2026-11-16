@@ -14,12 +14,12 @@ meta = {'catalog': (load('catalog.json') or {}).get('catalog') or old.get('catal
         'patchnotes': load('patchnotes.json') or old.get('patchnotes')}
 if pro:
     meta.update({'current': pro, 'previous': load('pro_previous.json'), 'recent': load('pro_recent.json'),
-                 'bisPro': load('pro_bis.json')})
+                 'bisPro': load('pro_bis.json'), 'firstPick': load('pro_first.json') or old.get('firstPick')})
     mu = load('pro_matchups.json')
     if mu:
         json.dump(mu, open(os.path.join(repo, 'data', 'matchups.json'), 'w'), separators=(',', ':'), ensure_ascii=False)
 elif (old.get('current') or {}).get('snapshot', {}).get('span'):
-    meta.update({k: old.get(k) for k in ('current', 'previous', 'recent', 'bisPro')})
+    meta.update({k: old.get(k) for k in ('current', 'previous', 'recent', 'bisPro', 'firstPick')})
 else:   # noch keine Turnierdaten: alte Zahlen behalten
     meta.update({k: old.get(k) for k in ('current', 'previous', 'bis', 'bisElite')})
 assert meta['catalog'] and meta['current']['snapshot']['entries'], 'keine Daten'

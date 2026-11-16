@@ -2,7 +2,7 @@ import BUNDLED_CATALOG from './catalog.js';
 // Champion-Bilder liegen als kleine Einzeldateien neben der Seite (img/sq, img/ld) und laden erst, wenn sie gebraucht werden.
 const imgPath=dir=>new Proxy({},{get:(_,id)=>typeof id==='string'&&/^[A-Za-z0-9]+$/.test(id)?`img/${dir}/${id}.webp`:undefined});
 const SQUARE=imgPath('sq'),LOADING=imgPath('ld');
-import {ROLES,ROLE_NAMES,OPP_REGIONS,emptyOppPlayers,profileOf,learnRoles,useCatalog,initialState,composition,recommend,metaStatus,validateMeta,validateState,shortPatch,LIM,adj,adjMu} from './engine.js';
+import {ROLES,ROLE_NAMES,OPP_REGIONS,emptyOppPlayers,profileOf,learnRoles,useCatalog,initialState,composition,recommend,metaStatus,validateMeta,validateState,shortPatch,LIM,adj,adjMu,setFirstPick,firstPickData} from './engine.js';
 import {poolCheck,banPlan,biggestChanges,draftTurn} from './insights.js';
 import {renderMini,mountMini,handleMiniClick,handleMiniInput,handleMiniSubmit} from './minigame.js';
 import {renderPuzzle,handlePuzzleClick,afterPuzzle,miniStats,setMatchups,getMatchups} from './puzzles.js';
@@ -210,7 +210,9 @@ function renderDraft(){
  if(!draftStarted()){lastPhaseKey=null;return renderDraftStart();}
  const t=draftTurn(state),c=t.current,tgt=stepTarget(c),ours=sideOf('us'),theirs=sideOf('them');
  const key=t.finished?'done':`${c.i}|${tgt.index}`;
- if(key!==csKey){csKey=key;hoverId=null;pickRole=null;csSearch='';csRole=tgt&&tgt.type!=='bans'?ROLES[tgt.index]:'ALL';}
+ if(key!==csKey){csKey=key;hoverId=null;pickRole=null;csSearch='';csRole=tgt&&tgt.type!=='bans'?ROLES[tgt.index]:'ALL';
+  // Erster Pick (Rot: die ersten zwei): gleich die Rolle vorschlagen, die Turnierteams an dieser Stelle meistens nehmen.
+  if(c&&c.who==='us'&&c.type==='pick'&&room?.role!=='viewer'&&firstPickData()&&state.allies.filter(Boolean).length<(state.side==='red'?2:1)){const a=roleAdvice();if(a.length&&a[0].score>=2){pickRole=a[0].i;csRole=ROLES[a[0].i];}}}
  const opp=activeOpp(),aiTurn=practice&&c&&c.who==='them';
  // Kopf
  const sub=`${state.side==='red'?'Rote':'Blaue'} Seite · gegen ${esc(opp?.name||(practice?'den Computer':'Gegner'))}${practice?' · Übung':''}${state.fearless?` · ${seriesLabel(state.fearless)}`:''}`;
@@ -298,8 +300,10 @@ function roleAdvice(){
   const pool=state.players[i].pool,free=pool.filter(v=>!tk.has(v.id)).length;
   if(pool.length&&free<=1){score+=3;reasons.push(free?'Pool fast leer: nur noch 1 frei':'Pool leer: schnell sichern');}
   else if(pool.length&&free===2){score+=1;reasons.push('Pool wird knapp: 2 frei');}
-  const blindLate=!enemy.certain.has(r)&&picksDone<3&&BLIND[r]<1;
-  if(!enemy.certain.has(r)&&picksDone<3){score+=BLIND[r];if(BLIND[r]>=1)reasons.push('Sicherer Blind-Pick');}
+  const fp=firstPickData(),row=fp&&picksDone<5?fp.order?.[state.side==='red'?'red':'blue']?.[picksDone]:null,openSum=row?open.reduce((a,j)=>a+(row[j]||0),0):0,share=row&&openSum?(row[i]||0)/openSum*100:null;
+  const blindLate=!enemy.certain.has(r)&&picksDone<3&&(share!=null?share<12:BLIND[r]<1);
+  if(share!=null&&!enemy.certain.has(r)&&picksDone<3){score+=share/12;if(share>=20)reasons.push(`In Turnieren oft als ${picksDone+1}. Pick (${Math.round(share)} %)`);}
+  else if(!enemy.certain.has(r)&&picksDone<3){score+=BLIND[r];if(BLIND[r]>=1)reasons.push('Sicherer Blind-Pick');}
   const best=rec({...state,selectedRole:i,poolOnly:false})[0];
   if(best&&best.score>=75){score+=1;reasons.push(`Starker Pick frei: ${cname(best.id)}`);}
   if(!reasons.length)reasons.push(blindLate?'Lieber später, sonst leicht zu kontern':'Offen');
@@ -933,7 +937,7 @@ function renderMeta(){
   const list=(rows,empty)=>rows.length?`<ul class="pc-list">${rows.map(r=>`<li>${portrait(r.id,'av sm')}<span class="pc-name">${esc(cname(r.id))}${chgTag(r.id)} <span class="muted">${ROLE_NAMES[r.role]}</span></span><span class="num">${pct(r.wr)}</span>${deltaTag(r.delta)}</li>`).join('')}</ul>`:`<p class="fine">${empty}</p>`;
   body=prev?`<div class="two"><section class="card"><h3 class="card-title">Aufsteiger</h3>${list(ch.risers,'Keine Daten.')}</section><section class="card"><h3 class="card-title">Absteiger</h3>${list(ch.fallers,'Keine Absteiger.')}</section></div><p class="fine">${prev.span?`${esc(recentMeta?.span||'')} gegenüber ${esc(prev.span)}, nur Champions mit mindestens ${int(LIM.trend)} Spielen in beiden Jahren.`:`Seit Patch ${esc(shortPatch(prev.patch))}, nur Champions mit mindestens ${int(LIM.trend)} Spielen in beiden Patches.`}</p>`:'<section class="card empty"><p>Für Trends fehlen Vergleichsdaten.</p></section>';
  }else{
-  body=`<section class="card flush"><div class="filters"><div class="search">${icon('search')}<input class="field" id="meta-search" placeholder="Champion suchen" value="${esc(metaSearch)}" aria-label="Champion suchen"></div><select class="field" id="meta-role" aria-label="Nach Rolle filtern"><option value="ALL">Alle Rollen</option>${ROLES.map(r=>`<option value="${r}" ${metaRole===r?'selected':''}>${ROLE_NAMES[r]}</option>`).join('')}</select><select class="field" id="meta-sort" aria-label="Sortierung"><option value="adjusted" ${metaSort==='adjusted'?'selected':''}>Geglättete Winrate</option><option value="wins" ${metaSort==='wins'?'selected':''}>Winrate</option><option value="games" ${metaSort==='games'?'selected':''}>Spiele</option></select></div><div id="meta-table">${metaTable()}</div></section><p class="fine">Geglättet = (Siege + ${LIM.prior}) / (Spiele + ${2*LIM.prior}). So rücken kleine Stichproben Richtung 50 %.</p>`;
+  body=`<section class="card flush"><div class="filters"><div class="search">${icon('search')}<input class="field" id="meta-search" placeholder="Champion suchen" value="${esc(metaSearch)}" aria-label="Champion suchen"></div><select class="field" id="meta-role" aria-label="Nach Rolle filtern"><option value="ALL">Alle Rollen</option>${ROLES.map(r=>`<option value="${r}" ${metaRole===r?'selected':''}>${ROLE_NAMES[r]}</option>`).join('')}</select><select class="field" id="meta-sort" aria-label="Sortierung"><option value="adjusted" ${metaSort==='adjusted'?'selected':''}>Geglättete Winrate</option><option value="wins" ${metaSort==='wins'?'selected':''}>Winrate</option><option value="games" ${metaSort==='games'?'selected':''}>Spiele</option></select></div><div id="meta-table">${metaTable()}</div></section><p class="fine">Geglättet = (Siege + ${LIM.prior}) / (Spiele + ${2*LIM.prior}). So rücken kleine Stichproben Richtung 50 %.${state.meta?.span?' Dabei, und bei Pick- und Banrate, zählen neuere Spiele mehr: ein Spiel von vor fünf Monaten halb so viel wie eins von heute.':''}</p>`;
  }
  const note=!s.ok?`<div class="banner warn">Diese Winrates fließen gerade nicht in Empfehlungen ein: ${esc(s.label)}.</div>`:s.fallback?`<div class="banner">Patch ${esc(shortPatch(currentPatch()))} ist neu und hat noch zu wenige Spiele. Bis genug Daten da sind, zeigen und verwenden wir die Winrates von Patch ${esc(shortPatch(m.patch))}.</div>`:'';
  return head('Meta',sub)+chgList+note+`<div class="subtabs" role="tablist">${META_TABS.map(([k,l])=>`<button role="tab" data-meta-tab="${k}" aria-selected="${metaTab===k}">${l}</button>`).join('')}</div>`+body;
@@ -1314,7 +1318,7 @@ function onRecent(d){if(!d)return;try{recentMeta=validateMeta(d.snapshot,champId
 // Best in Slot: täglich aktualisiert. Nur übernehmen, wenn das Format stimmt.
 function onBis(b,key='solo'){try{if(!b||!b.roles||!ROLES.every(r=>Array.isArray(b.roles[r])&&b.roles[r].length>=3&&b.roles[r].every(x=>Array.isArray(x)&&typeof x[0]==='string'&&isFinite(x[1])&&isFinite(x[2]))))return;BIS[key]={label:String(b.label||''),patch:String(b.patch||''),region:String(b.region||'Global'),asOf:String(b.asOf||''),matches:Number(b.matches)||0,roles:Object.fromEntries(ROLES.map(r=>[r,b.roles[r].slice(0,6).map(x=>[x[0],Number(x[1]),Number(x[2]),Number(x[3])||0])]))};if(page==='team')render();}catch{}}
 async function loadStatic(){
- try{const r=await fetch('data/meta.json',{cache:'no-cache'});if(!r.ok)throw Error();const d=await r.json();onCatalog(d.catalog);onPatchnotes(d.patchnotes);onPrevious(d.previous);onRecent(d.recent);onCurrent(d.current);onBis(d.bis);onBis(d.bisElite,'elite');if(d.bisPro)for(const k of ['top','all','prime'])onBis(d.bisPro[k],k);}
+ try{const r=await fetch('data/meta.json',{cache:'no-cache'});if(!r.ok)throw Error();const d=await r.json();onCatalog(d.catalog);onPatchnotes(d.patchnotes);onPrevious(d.previous);onRecent(d.recent);onCurrent(d.current);onBis(d.bis);onBis(d.bisElite,'elite');if(d.bisPro)for(const k of ['top','all','prime'])onBis(d.bisPro[k],k);setFirstPick(d.firstPick);if(page==='draft')render();}
  catch{refreshMessage='Die Winrates konnten gerade nicht geladen werden. Prüfe die Internetverbindung und lade die Seite neu.';render();}
 }
 async function connect(){

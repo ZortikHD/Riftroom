@@ -1,6 +1,6 @@
 // Minispiele mit Wertung, ähnlich wie Puzzles auf Chess.com:
 // Counter-Puzzle: Gegner und Rolle sind vorgegeben, du wählst aus vier Champions den besten Konter.
-//   Bewertet wird mit echten Matchup-Winrates (Lolalytics, Master+). Deine Wertung steigt und fällt wie eine Elo-Zahl.
+//   Bewertet wird mit echten Matchup-Winrates aus Turnierspielen (Leaguepedia). Deine Wertung steigt und fällt wie eine Elo-Zahl.
 // Tägliches Puzzle: fünf Counter-Puzzles, für alle gleich, mit Rangliste.
 // Wer gewinnt?: zwei Drafts, welches Team liegt laut Lane-Duellen vorne.
 // Ban-Puzzle: ein Gegnerteam mit Pools, welcher Ban tut am meisten weh.
@@ -14,7 +14,7 @@ const ROLE_LABEL={TOP:'Top',JUNGLE:'Jungle',MIDDLE:'Mid',BOTTOM:'Bot',UTILITY:'S
 const LETTER_ROLE={T:'Top',J:'Jungle',M:'Mid',A:'ADC',S:'Support'};
 const OBJ_NAME={drake:'Drache',baron:'Baron',grubs:'Leerenkriecher',herald:'Herold',tower:''};
 const OBJ_STATE={up:'lebt',taken:'genommen',fight:'Kampf',buff:'Gegner hat Buff',enemy:'Gegner dran'};
-const MIN_GAMES=130;
+import {LIM,setLimits} from './engine.js';
 
 const load=(k,d)=>{try{return{...d,...JSON.parse(localStorage.getItem(k)||'{}')};}catch{return{...d};}};
 const store=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch{}};
@@ -39,9 +39,9 @@ const shuffle=a=>{a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.floor(R()*
 function seeded(str){let h=1779033703^str.length;for(let i=0;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),3432918353);h=h<<13|h>>>19;}let a=h>>>0;return()=>{a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
 const withRng=(rng,fn)=>{const old=R;R=rng;try{return fn();}finally{R=old;}};
 // Winrate mit 200 virtuellen Spielen Richtung 50 % geglättet, damit kleine Stichproben nicht täuschen.
-const adj=(wr,n)=>(wr*n+50*200)/(n+200);
-// Für Lane-Duelle (Master+, kleinere Stichproben): 70 virtuelle Spiele.
-const adjM=(wr,n)=>(wr*n+50*70)/(n+70);
+const adj=(wr,n)=>(wr*n+50*2*LIM.prior)/(n+2*LIM.prior);
+// Für Lane-Duelle (kleinere Stichproben): eigene Glättung aus den Daten (LIM.muPrior).
+const adjM=(wr,n)=>(wr*n+50*LIM.muPrior)/(n+LIM.muPrior);
 const name=id=>ctx.esc(ctx.cname(id));
 const icon=id=>`<img src="${ctx.SQUARE[id]}" alt="">`;
 const spinner='<section class="card pz-loading"><div class="spinner"></div></section>';
@@ -59,7 +59,7 @@ const sqOf=g=>g==='best'?'🟩':g==='good'?'🟨':'🟥';
 function fetchData(n){
  if(loading[n])return;loading[n]=true;
  fetch(`data/${n}.json`,{cache:'no-cache'}).then(r=>{if(!r.ok)throw Error();return r.json();})
-  .then(d=>{if(n==='matchups'){if(!mu)mu=d;const f=muWait;muWait=null;f?.();}else scen=d;ctx?.rerender();})
+  .then(d=>{if(n==='matchups'){if(!mu){mu=d;setLimits(d?.limits);}const f=muWait;muWait=null;f?.();}else scen=d;ctx?.rerender();})
   .catch(()=>{loading[n]='error';ctx?.rerender();});
 }
 const dataError=n=>`<section class="card empty"><h2>Daten nicht erreichbar</h2><p>${n==='matchups'?'Die Matchup-Daten':'Die Situationen'} konnten nicht geladen werden. Prüfe die Internetverbindung.</p></section>`;
@@ -70,7 +70,7 @@ function makePuzzle(roles,hard=HARD){
  for(let tries=0;tries<80;tries++){
   const role=pick(roles),table=mu.roles[role]||{},enemies=Object.keys(table).filter(known).sort();if(!enemies.length)continue;
   const enemy=pick(enemies);
-  const rows=table[enemy].filter(r=>r[2]>=MIN_GAMES&&known(r[0])).map(([id,wr,n])=>({id,wr,n,a:adjM(wr,n)})).sort((x,y)=>y.a-x.a||(x.id<y.id?-1:1));
+  const rows=table[enemy].filter(r=>r[2]>=LIM.muPick&&known(r[0])).map(([id,wr,n])=>({id,wr,n,a:adjM(wr,n)})).sort((x,y)=>y.a-x.a||(x.id<y.id?-1:1));
   if(rows.length<8)continue;
   const best=rows[0];if(best.a-rows[1].a<(hard?0.3:0.6)||best.a<51)continue;
   const rest=rows.slice(1),used=new Set([best.id]);
@@ -111,7 +111,8 @@ function puzzleCard(p,pickAttr,next){
  const verdict=!done?'':`<div class="pz-verdict ${p.grade}"><strong>${p.grade==='best'?'Bester Pick!':p.grade==='good'?'Guter Pick':'Ungünstiger Pick'}</strong><p>${p.grade==='best'?`${name(best.id)} gewinnt ${pct(best.wr)} gegen ${name(enemy)}. Mehr geht hier nicht.`:p.grade==='good'?`${name(chosen.id)} gewinnt ${pct(chosen.wr)} gegen ${name(enemy)}, das ist solide. Noch besser wäre ${name(best.id)} mit ${pct(best.wr)}.`:`${name(chosen.id)} gewinnt nur ${pct(chosen.wr)} gegen ${name(enemy)}. Am besten wäre ${name(best.id)} mit ${pct(best.wr)}.`}</p>${next}</div>`;
  return`<div class="pz-enemy"><img class="pz-splash" src="${ctx.LOADING[enemy]||ctx.SQUARE[enemy]}" alt=""><div class="pz-enemy-text"><span class="role-label">Gegner · ${ROLE_LABEL[p.role]}</span><strong>${name(enemy)}</strong><span>Wer gewinnt am häufigsten gegen ${name(enemy)}?</span></div></div><div class="pz-opts">${optHtml}</div>${verdict}`;
 }
-const muSource=()=>`<p class="fine pz-src">Winrate in diesem Duell, Patch ${ctx.esc(mu.patch)}, ${ctx.esc(mu.rank)}, Solo/Duo (${ctx.esc(mu.source)}). Ab ${int(MIN_GAMES)} Spielen.</p>`;
+const muLabel=()=>mu.span?`Turnierspiele ${ctx.esc(mu.span)} (${ctx.esc(mu.source)})`:`Patch ${ctx.esc(mu.patch)}, ${ctx.esc(mu.rank)}, Solo/Duo (${ctx.esc(mu.source)})`;
+const muSource=()=>`<p class="fine pz-src">Winrate in diesem Duell, ${muLabel()}. Ab ${int(LIM.muPick)} Spielen.</p>`;
 const CP_N=10;let cr=null;
 const dotsOf=(list,i,n)=>Array.from({length:n},(_,k)=>`<i class="${list[k]||''} ${k===i?'now':''}"></i>`).join('');
 function counterHtml(){
@@ -203,8 +204,8 @@ function weighted(list){const sum=list.reduce((s,x)=>s+x.w,0);let r=R()*sum;for(
 // Vorteil des blauen Champions im Duell gegen den roten, in Prozentpunkten über 50 %.
 function laneEdge(role,b,r,poolB,poolR){
  const t=mu?.roles?.[role]||{};
- const vs=(t[r]||[]).find(x=>x[0]===b);if(vs&&vs[2]>=100)return{edge:adjM(vs[1],vs[2])-50,n:vs[2],src:'duel'};
- const vs2=(t[b]||[]).find(x=>x[0]===r);if(vs2&&vs2[2]>=100)return{edge:50-adjM(vs2[1],vs2[2]),n:vs2[2],src:'duel'};
+ const vs=(t[r]||[]).find(x=>x[0]===b);if(vs&&vs[2]>=LIM.mu)return{edge:adjM(vs[1],vs[2])-50,n:vs[2],src:'duel'};
+ const vs2=(t[b]||[]).find(x=>x[0]===r);if(vs2&&vs2[2]>=LIM.mu)return{edge:50-adjM(vs2[1],vs2[2]),n:vs2[2],src:'duel'};
  return{edge:((poolB?.a||50)-(poolR?.a||50))/2,n:0,src:'wr'};
 }
 function makeDuel(hard=HARD){
@@ -245,7 +246,7 @@ function duelView(ww,pickAttr,next){
  const winBar=done?`<div class="ww-win"><span class="b" style="width:${ww.win}%">${Math.round(ww.win)} %</span><span class="r">${Math.round(100-ww.win)} %</span></div>`:'';
  const verdict=done?`<div class="pz-verdict ${ww.right?'best':'bad'}"><strong>${ww.right?'Richtig!':'Daneben'}</strong><p>${favBlue?'Blau':'Rot'} liegt vorne: ${ww.lanes.filter(l=>(l.edge>0)===favBlue).length} von 5 Lane-Duellen gehen an ${favBlue?'Blau':'Rot'}. Geschätzte Siegchance ${Math.round(Math.max(ww.win,100-ww.win))} %.</p>${next}</div>`:'';
  const ask=done?'':`<div class="ww-ask"><p>Welches Team liegt laut Statistik vorne?</p><div class="row"><button class="btn ww-pick blue" ${pickAttr}="blue">Blau</button><button class="btn ww-pick red" ${pickAttr}="red">Rot</button></div></div>`;
- return`<div class="ww-board">${team(ww.blue,'blue')}<div class="ww-vs">VS</div>${team(ww.red,'red')}</div>${ask}${lanes}${winBar}${verdict}<p class="fine pz-src">Grundlage: Winrates der fünf Lane-Duelle (${ctx.esc(mu.rank)}, Patch ${ctx.esc(mu.patch)}). Eine Schätzung, keine Garantie.</p>`;
+ return`<div class="ww-board">${team(ww.blue,'blue')}<div class="ww-vs">VS</div>${team(ww.red,'red')}</div>${ask}${lanes}${winBar}${verdict}<p class="fine pz-src">Grundlage: Winrates der fünf Lane-Duelle (${muLabel()}). Eine Schätzung, keine Garantie.</p>`;
 }
 
 /* ---------- Ban-Puzzle ---------- */
@@ -494,7 +495,7 @@ export const mpSecs=hard=>tqSecs(!!hard);
 // Matchup-Winrates für den Draft (Lane-Duelle, Konter-Bans). Lädt die Datei beim ersten Aufruf nach.
 let muWait=null;
 export function getMatchups(onLoad){if(!mu){if(onLoad&&!muWait)muWait=onLoad;if(!loading.matchups)fetchData('matchups');}return mu;}
-export function setMatchups(d){if(d?.roles&&(!mu||d.updatedAt>(mu.updatedAt||'')))mu=d;}
+export function setMatchups(d){if(d?.roles&&(!mu||d.updatedAt>(mu.updatedAt||''))){mu=d;setLimits(d.limits);}}
 export function miniStats(){
  const d=load(DAILY_KEY,{}),today=todayKey();
  return{counter:String(pz.rating),daily:d.date===today&&(d.answers||[]).length>=DAILY_N?'Erledigt':'',whowins:wws.played?`${wws.right}/${wws.played}`:'',ban:bps.played?`${bps.points} Pkt.`:'',macro:mqs.best?`Rekord ${mqs.best}`:'',timer:tqs.best?`Rekord ${tqs.best}`:''};

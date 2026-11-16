@@ -1,5 +1,5 @@
-# Tägliches Daten-Update der GitHub-Version: Winrates (Master+), Best in Slot (Master+ und Grandmaster+),
-# geänderte Champions aus den Patch Notes und, bei neuem Patch oder wöchentlich, die Lane-Matchups.
+# Tägliches Daten-Update der GitHub-Version: Champion-Katalog, geänderte Champions aus den Patch Notes und
+# alle Turnierspiele seit dem 1. Januar des Vorjahres (Leaguepedia). Daraus: Winrates, Matchups, Best in Slot.
 # Läuft auf den Servern von GitHub, unabhängig von Claude. Fehler stehen im Reiter „Actions“ des Repos.
 name: Daten-Update
 on:
@@ -15,7 +15,7 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -29,9 +29,19 @@ jobs:
       - name: Geänderte Champions aus den Patch Notes
         continue-on-error: true
         run: python3 -I tools/riftroom_patchnotes.py "$RUNNER_TEMP/out"
-      - name: Lane-Matchups (bei neuem Patch oder älter als 7 Tage)
+      - name: Turnierspiele holen (Leaguepedia)
+        continue-on-error: true
+        env:
+          LEAGUEPEDIA_USER: ${{ secrets.LEAGUEPEDIA_USER }}
+          LEAGUEPEDIA_PASS: ${{ secrets.LEAGUEPEDIA_PASS }}
+        run: python3 -I tools/riftroom_pro.py . --max-anfragen 600
+      - name: Turnierspiele auswerten
+        continue-on-error: true
+        run: if [ -s data/pro/games.jsonl ]; then python3 -I tools/riftroom_proagg.py . "$RUNNER_TEMP/out"; else echo "Noch keine Turnierspiele."; fi
+      - name: Lane-Matchups aus der Solo Queue (nur solange es keine Turnierspiele gibt)
         continue-on-error: true
         run: |
+          if [ -s data/pro/games.jsonl ]; then echo "Matchups kommen aus Turnierspielen."; exit 0; fi
           if python3 -I - "$RUNNER_TEMP/out/current.json" data/matchups.json <<'EOF'
           import json, sys
           from datetime import datetime, timezone, timedelta
@@ -58,8 +68,9 @@ jobs:
           git config user.name "riftroom-daten"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/meta.json data/matchups.json
+          [ -f data/pro/games.jsonl ] && git add data/pro/games.jsonl
           if git diff --cached --quiet; then echo "Nichts Neues."; exit 0; fi
-          patch=$(python3 -I -c "import json;print(json.load(open('data/meta.json'))['current']['snapshot']['patch'])")
-          git commit -m "Daten-Update Patch $patch"
+          patch=$(python3 -I -c "import json;s=json.load(open('data/meta.json'))['current']['snapshot'];print(s.get('span') and 'Turniere '+s['span']+', '+str(s['matches'])+' Spiele' or 'Patch '+s['patch'])")
+          git commit -m "Daten-Update $patch"
           git push || { git pull --rebase && git push; }
           gh api -X POST "repos/${{ github.repository }}/pages/builds" >/dev/null 2>&1 || echo "Pages baut von selbst."

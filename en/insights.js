@@ -1,5 +1,5 @@
 // Auswertungen aus dem aktuellen und dem vorherigen Meta-Snapshot. Reine Funktionen, ohne Netzwerk.
-import {ROLES,adj} from './engine.js';
+import {ROLES,adj,LIM} from './engine.js';
 export const wr = e => e.wins / e.games;
 const key = e => e.champion + '|' + e.role;
 
@@ -14,14 +14,16 @@ export function averageWinrate(meta) {
 }
 
 // Veränderung der Winrate in Prozentpunkten; nur wenn beide Patches genug Spiele haben.
-export function delta(cur, prevIndex, minGames = 500) {
+export function delta(cur, prevIndex, minGames = LIM.trend) {
   const p = prevIndex?.get(key(cur));
   if (!p || cur.games < minGames || p.games < minGames) return null;
   return (wr(cur) - wr(p)) * 100;
 }
 
-export function poolCheck(state, cur, prev, catalogById, {drop = 1.0, rise = 1.0} = {}) {
+// trendCur: optional ein eigener Snapshot für die Veränderung (bei Turnierdaten: laufendes Jahr gegen Vorjahr).
+export function poolCheck(state, cur, prev, catalogById, {drop = 1.0, rise = 1.0, trendCur = null} = {}) {
   const prevIndex = prev ? indexMeta(prev) : null;
+  const trendIndex = trendCur ? indexMeta(trendCur) : null;
   const curIndex = indexMeta(cur);
   return state.players.map((player, i) => {
     const role = ROLES[i];
@@ -29,12 +31,13 @@ export function poolCheck(state, cur, prev, catalogById, {drop = 1.0, rise = 1.0
     const items = player.pool.map(p => {
       const e = curIndex.get(p.id + '|' + role);
       if (!e) return {id: p.id, comfort: p.comfort, flag: 'nodata'};
-      const d = delta(e, prevIndex);
+      const t = trendIndex ? trendIndex.get(p.id + '|' + role) : e;
+      const d = t ? delta(t, prevIndex) : null;
       const flag = d == null ? 'ok' : d <= -drop ? 'down' : d >= rise ? 'up' : 'ok';
       return {id: p.id, comfort: p.comfort, wr: wr(e) * 100, games: e.games, delta: d, flag};
     }).sort((a, b) => ({down: 0, nodata: 1, ok: 2, up: 3}[a.flag] - {down: 0, nodata: 1, ok: 2, up: 3}[b.flag]));
     const alternatives = cur.entries
-      .filter(e => e.role === role && e.games >= 2500 && !inPool.has(e.champion) && catalogById.has(e.champion))
+      .filter(e => e.role === role && e.games >= LIM.strong && !inPool.has(e.champion) && catalogById.has(e.champion))
       .sort((a, b) => adj(b) - adj(a)).slice(0, 3)
       .map(e => ({id: e.champion, wr: wr(e) * 100, games: e.games}));
     return {name: player.name, role, items, alternatives, needsAlternatives: items.some(x => x.flag === 'down' || x.flag === 'nodata')};
@@ -68,7 +71,7 @@ export function banPlan(state, meta, catalogById, opts = {}) {
     const main = new Map();
     for (const e of meta.entries) { const m = main.get(e.champion); if (!m || e.games > m.games) main.set(e.champion, e); }
     for (const e of main.values()) {
-      if (e.games < 2500 || !ok(e.champion)) continue;
+      if (e.games < LIM.strong || !ok(e.champion)) continue;
       const wrA = adj(e) * 100, edge = wrA - avg;
       if (edge <= 0.3) continue;
       const prob = Math.min(0.35, (e.pickRate || 0) / 100);
@@ -119,7 +122,7 @@ export function banPlan(state, meta, catalogById, opts = {}) {
   return {items: items.slice(0, n), skipped: skipped.filter(x => !items.slice(0, n).some(i => i.id === x.id))};
 }
 
-export function biggestChanges(cur, prev, n = 5, minGames = 1250) {
+export function biggestChanges(cur, prev, n = 5, minGames = LIM.trend) {
   if (!prev) return {risers: [], fallers: []};
   const prevIndex = indexMeta(prev);
   const rows = [];

@@ -1,11 +1,18 @@
 // Spielplan ohne KI: Stärken/Schwächen, Zeitleiste mit Objectives und Richtwerte pro Rolle.
 // Alles sind Faustregeln aus den Champion-Profilen, keine gemessenen Werte.
-import {ROLES,ROLE_NAMES,profileOf,composition} from './engine.js';
+import {ROLES,ROLE_NAMES,profileOf,composition,champName} from './engine.js';
 import {phaseCurve} from './features.js';
 
 // Objective-Timer ab Patch 26.1 (Saison 2026). Atakhan gibt es nicht mehr.
 export const OBJECTIVES={dragon:'5:00',grubs:'8:00',herald:'15:00',baron:'20:00'};
 
+
+// Wie gern ein Champion die Lane verlässt: 2 = starker Roamer (Mobilität, globale Ulti, Engage), 0 = bleibt in der Lane.
+// Handgepflegt, weil die Profile dafür keinen Wert haben. Unbekannte Champions gelten als 1 (mittel).
+const ROAM=new Map([...["Galio", "TwistedFate", "Taliyah", "Ahri", "Qiyana", "Talon", "Katarina", "Leblanc", "Pantheon", "Sylas", "Akali", "Ekko", "Zed", "Fizz", "Diana", "Naafiri", "Aurora", "Kassadin", "Ryze", "Shen", "Nocturne", "Bard", "Pyke", "Rakan", "Alistar", "Rell", "Thresh", "Nautilus", "Leona", "Camille", "Quinn"].map(id=>[id,2]),...["Veigar", "Azir", "Viktor", "Anivia", "Cassiopeia", "Vladimir", "Ziggs", "Xerath", "Velkoz", "Hwei", "Smolder", "Kayle", "Karthus", "Malzahar", "AurelionSol", "Heimerdinger", "Soraka", "Yuumi", "Sona", "Seraphine", "Lulu", "Nami", "Milio", "Renata", "Zyra", "Brand", "Senna", "KogMaw"].map(id=>[id,0])]);
+const GLOBAL_ULT=new Set(["Galio", "TwistedFate", "Shen", "Pantheon", "Ryze", "Taliyah", "Nocturne"]);
+export const roamOf=id=>id?ROAM.get(id)??1:1;
+const nm=id=>champName(id)||'';
 const phaseDiff=(a,b)=>{const x=phaseCurve(a),y=phaseCurve(b);return x.map((v,i)=>v-y[i]);};
 // 1 = ihr seid stärker, -1 = Gegner stärker, 0 = ausgeglichen
 export function phaseEdge(allies,enemies){return phaseDiff(allies,enemies).map(d=>d>0.8?1:d<-0.8?-1:0);}
@@ -46,22 +53,23 @@ export function timeline(allies,enemies){
 }
 
 // Richtwerte pro Rolle, angepasst an das Scaling des Champions.
-export function benchmarks(i,allyId,allies){
+export function benchmarks(i,allyId,allies,enemies=[]){
+ const r=roamOf(allyId),foe=enemies[i],foeRoams=roamOf(foe)===2&&!!foe;
  const role=ROLES[i],p=profileOf(allyId)||{scaling:2,engage:0};
  const spike=p.scaling>=3?'Strong late: farm safely, spike at two items (~20 min).':p.scaling<=1?'Strong early: apply pressure until ~14 min and extend your lead.':'Strong after the first item: then look for fights.';
  const B={
   TOP:[['10:00','70+ CS'],['~7:00','Level 6'],[OBJECTIVES.grubs,'Have priority at Voidgrubs']],
   JUNGLE:[['~3:15','First clear done'],['~7:30','Level 6'],[OBJECTIVES.dragon,'Plan dragon or the other side']],
-  MIDDLE:[['10:00','75+ CS'],['~6:30','Level 6, then roam'],['~11:00','First item']],
+  MIDDLE:[['10:00','75+ CS'],['~6:30',r>=1?'Level 6, then roam':'Level 6, hold the wave'],['~11:00','First item']],
   BOTTOM:[['10:00','80+ CS'],['~8:30','Level 6'],['~12:00','First item']],
-  UTILITY:[['~1:45','Hit level 2 first'],['~4:00','Ward the dragon pit'],['after 1st back','Roam mid or help jungle']],
+  UTILITY:[['~1:45','Hit level 2 first'],['~4:00','Ward the dragon pit'],['after 1st back',r>=1?'Roam mid or help jungle':'Ward the river, stay with your ADC']],
  }[role];
  const roam={
-  TOP:'After crashing your wave, rotate to Grubs or Herald.',
+  TOP:r===2?'Use your ultimate to help bot or your jungler as soon as a fight starts there. Push the wave first.':'After crashing your wave, rotate to Grubs or Herald.',
   JUNGLE:gankTarget(allies),
-  MIDDLE:'Roam when your wave is pushed and your opponent has to back.',
+  MIDDLE:(r===2?'Roam once your wave is pushed and your opponent has to back.':r===1?'Only roam after a push and with vision. Farm comes first.':'Barely roam: farm and hold the wave. When your opponent roams, take tower plates.')+(foeRoams?` Careful: ${nm(foe)} likes to roam, so ping as soon as they go missing.`:''),
   BOTTOM:'Don’t roam. Farm comes first, take over mid after the first tower.',
-  UTILITY:'Roam when the bot wave crashes or your ADC has backed.',
+  UTILITY:r===2?'Roam when the bot wave crashes or your ADC has backed.':r===1?'Roam now and then when the wave crashes. Otherwise ward the river.':'Stay with your ADC. Roams barely pay off for your champion, ward the river instead.',
  }[role];
  return{items:B,spike,roam};
 }
@@ -104,11 +112,12 @@ export function roleTimeline(key,allies,enemies){
   add('0:00',0,'Level 1–3','Clear the wave fast. With priority you can help your jungler at Scuttle.');
   add('~3:15',0,'Jungler window','Ward the river. When the enemy jungler shows elsewhere, you can trade.');
   add(OBJECTIVES.dragon,0,'First dragon','With priority, be first in the river so your team can secure dragon.');
-  add('~6:30',0,'Level 6',early(me[0])?'Your strongest window: roam bot or top after pushing.':'Roam after pushing, but don’t give up CS.');
+  add('~6:30',0,'Level 6',roamOf(me[0])===2?`${nm(me[0])} roams well: after pushing, go bot or top when your opponent has to back.${early(me[0])?' This is your strongest window.':''}`:roamOf(me[0])===1?'Only roam when your wave is pushed and there is vision on the way. Otherwise keep farming.':`${nm(me[0])} barely roams: control the wave and farm${late(me[0])?', you get much stronger later':''}. Instead of roaming, take tower plates when your opponent goes missing.`);
   add('10:00',null,'Check','Goal: 75+ CS.');
   add('~11:00',1,'First item','Then hold mid priority and place vision around objectives.');
   add(OBJECTIVES.herald,1,'Rift Herald','Mid priority means your team can go to Herald.');
   add(OBJECTIVES.baron,2,'Baron',late(me[0])?'You are at your strongest now: look for fights at Baron.':'Place vision with your team, don’t go to a side lane alone.');
+  if(vs[0]&&roamOf(vs[0])===2)add('from ~6:00',0,'Enemy roams',`${nm(vs[0])} likes to roam${GLOBAL_ULT.has(vs[0])?' and can join other lanes with their ultimate':''}. As soon as they leave the lane: ping right away, then ${roamOf(me[0])===2?'follow or roam on the other side yourself':'push the wave and take tower plates instead of chasing'}.`);
  }
  if(key==='BOTLANE'){
   const eng=engager(me[1]),foe=vs.some(engager);
@@ -118,11 +127,13 @@ export function roleTimeline(key,allies,enemies){
   add('~4:00',0,'Vision for dragon','Support places a ward in the dragon pit, ADC holds the wave.');
   add(OBJECTIVES.dragon,0,'First dragon','Only with priority and your jungler nearby. Push the wave first.');
   add('6:00–8:30',0,'Level 6 kill window',foe?'The opponent has engage: keep your distance until your ultimates are ready.':'Both ultimates ready: look for an all-in together.');
-  add('~8:00',0,'Support roam','After a crash or when the ADC has backed: help mid or jungle.');
+  if(roamOf(me[1])===0)add('~8:00',0,'Vision instead of roams',`${nm(me[1])} should stay with the ADC and ward the river. Roams barely pay off for your support.`);else add('~8:00',0,'Support roam','After a crash or when the ADC has backed: help mid or jungle.');
+  if(vs[1]&&roamOf(vs[1])===2)add('from ~5:00',0,'Enemy support roams',`${nm(vs[1])} likes to roam. As soon as they go missing: warn mid and jungle, and pressure 2-v-1 with your ADC.`);
   add('10:00',null,'Check','Goal: ADC 80+ CS. Support: quest nearly done, vision in the river.');
   add('~12:00',1,'First item',late(me[0])?'Your ADC scales: farm safely until two items.':'Apply pressure with the first item and take tower plates.');
   add('~14:00',1,'End of laning phase','Take over mid together or group for the next dragon.');
  }
+ const mins=t=>{const m=String(t).match(/(\d{1,2}):(\d{2})/);return m?+m[1]*60+ +m[2]:9999;};L.sort((a,b)=>mins(a.t)-mins(b.t));
  const spikes=me.filter(Boolean).map(id=>({id,txt:late(id)?'strong late':early(id)?'strong early':'strong after first item'}));
  return{items:L,spikes,me,vs};
 }

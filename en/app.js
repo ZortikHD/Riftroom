@@ -714,7 +714,7 @@ function renderPlan(){
  const list=(t,arr)=>arr?.length?`<h4>${t}</h4><ul>${arr.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:'';
  const cards=ROLES.map((r,i)=>{const a=state.allies[i],e=state.enemies[i],mu=state.matchups[e],ai=n.status==='done'?n.data.roles[r]:null;
   const body=ai?list('Key info',ai.wichtig)+list('Plan',ai.plan):n.status==='loading'?'<div class="sk"></div><div class="sk short"></div><div class="sk"></div>':'';
-  const bm=benchmarks(i,a,state.allies);
+  const bm=benchmarks(i,a,state.allies,state.enemies);
   const when=(ai?.wann||[]).map(x=>{const m=x.match(/^\s*(ca\.\s*)?(\d{1,2}:\d{2}(?:\s*[–-]\s*\d{1,2}:\d{2})?)\s*[–:-]?\s*(.*)$/);return m?[m[2].replace(/\s+/g,''),m[3]]:['',x];});
   const bmHtml=`<div class="bench"><h4>Your benchmarks</h4><ul class="bench-list">${[...bm.items,...when].map(([t,txt])=>`<li>${t?`<span class="bench-t">${esc(t)}</span>`:''}<span>${esc(txt)}</span></li>`).join('')}</ul><p class="bench-note"><b>Power-Spike:</b> ${esc(bm.spike)}</p><p class="bench-note"><b>Roaming:</b> ${esc(bm.roam)}</p></div>`;
   return`<section class="card role-card side-${ours}" id="rc-${r}" style="--k:${i}"><div class="rc-head"><span class="role-label">${ROLE_NAMES[r]}</span><span class="fine">${esc(state.players[i].name)}</span></div><div class="rc-vs">${portrait(a)}<span class="vs">vs</span>${portrait(e)}</div><p class="rc-names"><strong>${esc(cname(a))}</strong> vs <strong>${esc(cname(e))}</strong></p>${mu?`<p class="rc-mu">${icon('book')}<span>${esc(mu)}</span></p>`:''}${body}${bmHtml}</section>`;}).join('');
